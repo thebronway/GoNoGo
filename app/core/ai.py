@@ -1,13 +1,15 @@
 import os
 import json
-from openai import OpenAI
+from openai import AsyncOpenAI  # <--- CHANGED to AsyncOpenAI
 from dotenv import load_dotenv
 
 load_dotenv()
 
-client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
+# Initialize Async Client
+client = AsyncOpenAI(api_key=os.getenv("OPENAI_API_KEY"))
 
-def analyze_risk(icao_code, weather_data, notams, plane_size="small", reporting_station=None, external_airspace_warnings=[]):
+# CHANGED: Added 'async' keyword
+async def analyze_risk(icao_code, weather_data, notams, plane_size="small", reporting_station=None, external_airspace_warnings=[]):
     
     profiles = {
         "small": "Cessna 172/Piper Archer (Max X-Wind: 15kts, IFR: No Radar)",
@@ -21,16 +23,23 @@ def analyze_risk(icao_code, weather_data, notams, plane_size="small", reporting_
         station_context = f"NOTE: Target {icao_code} has no weather. Using {reporting_station} for METAR/TAF."
 
     # --- UPDATED AIRSPACE LOGIC ---
-    # We prepare the text here, but we will inject it into the USER message, not the SYSTEM prompt.
-    airspace_alert_text = "No major geospatial airspace restrictions detected."
+    # Default message: No *Permanent* restrictions found, but warn about TFRs.
+    airspace_alert_text = """
+    NOTE: No intersection with Permanent Prohibited/Restricted zones (P-40, DC SFRA, etc.) detected.
+    
+    CRITICAL: This tool DOES NOT check dynamic TFRs (VIPs, Stadiums, Fire). 
+    Pilot MUST verify TFRs at: https://tfr.faa.gov/
+    """
+    
     if external_airspace_warnings:
         # Convert list to a bulleted string
         bullet_list = "\n".join([f"- {w}" for w in external_airspace_warnings])
         airspace_alert_text = f"""
         [MANDATORY INCLUSION]
-        The following AIRSPACE ALERTS were detected via geospatial check. 
-        You MUST summarize these in the Executive Summary:
+        The following PERMANENT AIRSPACE RESTRICTIONS were detected:
         {bullet_list}
+        
+        CRITICAL: Also verify dynamic TFRs at https://tfr.faa.gov/
         """
 
     system_prompt = f"""
@@ -96,7 +105,7 @@ def analyze_risk(icao_code, weather_data, notams, plane_size="small", reporting_
     """
 
     try:
-        response = client.chat.completions.create(
+        response = await client.chat.completions.create(
             model="gpt-4o-mini",
             messages=[
                 {"role": "system", "content": system_prompt},

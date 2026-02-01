@@ -1,6 +1,6 @@
 import airportsdata
 import math
-import requests
+import httpx
 
 # Load Databases
 print("DEBUG: Loading airport databases...")
@@ -9,34 +9,60 @@ airports_lid = airportsdata.load('LID')
 print(f"DEBUG: Loaded {len(airports_icao)} ICAO and {len(airports_lid)} LID airports.")
 
 # --- DEFINED AIRSPACE ZONES ---
+# Sources: FAA Sectional Charts (Prohibited Areas P-*)
 RESTRICTED_ZONES = {
     "DC_SFRA": {
         "name": "Washington DC SFRA",
-        "lat": 38.8512, "lon": -77.0377, # DCA VOR
-        "radius": 30, # Nautical Miles
-        "type": "RESTRICTED"
+        "lat": 38.8512, "lon": -77.0377, "radius": 30, "type": "RESTRICTED"
     },
     "DC_FRZ": {
         "name": "Washington DC Flight Restricted Zone (FRZ)",
-        "lat": 38.8512, "lon": -77.0377, 
-        "radius": 13, 
-        "type": "PROHIBITED" 
+        "lat": 38.8512, "lon": -77.0377, "radius": 13, "type": "PROHIBITED"
+    },
+    "P_40": {
+        "name": "P-40 (Camp David)",
+        "lat": 39.6483, "lon": -77.4636, "radius": 5, "type": "PROHIBITED"
+    },
+    "P_47": {
+        "name": "P-47 (Pantex Nuclear Facility, TX)",
+        "lat": 35.3130, "lon": -101.5580, "radius": 4, "type": "PROHIBITED"
+    },
+    "P_49": {
+        "name": "P-49 (Crawford, TX)",
+        "lat": 31.5800, "lon": -97.4100, "radius": 5, "type": "PROHIBITED"
+    },
+    "P_50": {
+        "name": "P-50 (Kings Bay Sub Base, GA)",
+        "lat": 30.7967, "lon": -81.5200, "radius": 3, "type": "PROHIBITED"
+    },
+    "P_51": {
+        "name": "P-51 (Bangor Sub Base, WA)",
+        "lat": 47.7300, "lon": -122.7200, "radius": 4, "type": "PROHIBITED"
+    },
+    "DISNEY_FL": {
+        "name": "Disney World (The Mouse)",
+        "lat": 28.4179, "lon": -81.5812, "radius": 3, "type": "RESTRICTED"
+    },
+    "DISNEY_CA": {
+        "name": "Disneyland",
+        "lat": 33.8121, "lon": -117.9190, "radius": 3, "type": "RESTRICTED"
     }
 }
 
-def get_coords_from_awc(icao):
-    """Fallback: Ask FAA API."""
+async def get_coords_from_awc(icao):
+    """Fallback: Ask FAA API (Async)."""
     try:
         url = f"https://aviationweather.gov/api/data/station?ids={icao}&format=json"
-        response = requests.get(url, timeout=5)
-        if response.status_code == 200:
-            data = response.json()
-            if data and isinstance(data, list) and len(data) > 0:
-                return {
-                    "lat": float(data[0]["lat"]), 
-                    "lon": float(data[0]["lon"]),
-                    "name": data[0].get("site", icao)
-                }
+        async with httpx.AsyncClient(timeout=5.0) as client:
+            response = await client.get(url)
+            if response.status_code == 200:
+                data = response.json()
+                if data and isinstance(data, list) and len(data) > 0:
+                    return {
+                        "lat": float(data[0]["lat"]), 
+                        "lon": float(data[0]["lon"]),
+                        "name": data[0].get("site", icao)
+                    }
     except Exception as e:
         print(f"DEBUG: API Lookup Error: {e}")
     return None
@@ -75,7 +101,7 @@ def check_airspace_zones(target_code, target_lat, target_lon):
 
     return warnings
 
-def get_nearest_reporting_stations(target_code, limit=10):
+async def get_nearest_reporting_stations(target_code, limit=10):
     """
     Returns a LIST of nearest airport codes.
     PRIORITIZES Large/Medium airports to ensure we find a valid weather station quickly.
@@ -85,7 +111,7 @@ def get_nearest_reporting_stations(target_code, limit=10):
     target = airports_icao.get(target_code) or airports_lid.get(target_code)
     
     if not target:
-        target = get_coords_from_awc(target_code)
+        target = await get_coords_from_awc(target_code)
 
     if not target:
         return []

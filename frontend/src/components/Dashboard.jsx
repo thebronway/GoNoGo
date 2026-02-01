@@ -1,6 +1,15 @@
 import React, { useState } from 'react';
-import axios from 'axios';
 import Bubble from './Bubble';
+
+
+const getClientId = () => {
+  let id = localStorage.getItem("gonogo_client_id");
+  if (!id) {
+    id = crypto.randomUUID(); 
+    localStorage.setItem("gonogo_client_id", id);
+  }
+  return id;
+};
 
 const Dashboard = () => {
   const [icao, setIcao] = useState('');
@@ -14,22 +23,61 @@ const Dashboard = () => {
     setLoading(true);
     setError(null);
     
-    const apiUrl = "/api/analyze";
+    const payload = { 
+      icao: icao, 
+      plane_size: plane 
+    };
 
     try {
-      const res = await axios.post(apiUrl, { 
-        icao: icao, 
-        plane_size: plane 
+      const response = await fetch("/api/analyze", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "X-Client-ID": getClientId(), // <--- NEW: Sends your "Digital Badge"
+        },
+        body: JSON.stringify(payload),
       });
-      
-      if (res.data.error) {
-        setError(res.data.error);
-      } else {
-        setData(res.data);
+
+      // --- ERROR HANDLING LOGIC ---
+      if (!response.ok) {
+        // 1. Attempt to parse the custom JSON error from the backend
+        let errorDetail = "An unexpected error occurred.";
+        try {
+          const errorData = await response.json();
+          if (errorData.detail) {
+            errorDetail = errorData.detail;
+          }
+        } catch (parseError) {
+          // If the backend didn't send JSON (e.g., server crash), keep generic message
+          errorDetail = `Server error: ${response.status} ${response.statusText}`;
+        }
+
+        // 2. Throw an error object that contains the specific message
+        const customError = new Error(errorDetail);
+        customError.apiMessage = errorDetail; 
+        throw customError;
       }
+      // --------------------------------
+
+      const result = await response.json();
+      
+      if (result.error) {
+        setError(result.error);
+      } else {
+        setData(result);
+      }
+      
     } catch (err) {
-      setError("Failed to connect to API. Ensure Docker is running.");
-      console.error(err);
+      console.error("Full Error Object:", err);
+      
+      // 3. Check for our custom property 'apiMessage'
+      if (err.apiMessage) {
+        setError(err.apiMessage);
+      } else if (err.message && err.message !== "Failed to fetch") {
+        setError(err.message);
+      } else {
+        setError("Failed to connect to API. Ensure Docker is running.");
+      }
     } finally {
       setLoading(false);
     }
@@ -68,11 +116,13 @@ const Dashboard = () => {
             <div className="absolute inset-y-0 right-0 flex items-center px-4 pointer-events-none text-gray-400">▼</div>
         </div>
 
-        <div className="flex-1 flex gap-2 h-12 md:h-full">
+        <div className={`flex-1 grid gap-2 h-12 md:h-full ${data ? 'grid-cols-2' : 'grid-cols-1'}`}>
+            
+            {/* ANALYZE BUTTON */}
             <button 
               onClick={handleAnalyze} 
-              disabled={data || loading} // Lock when data exists
-              className="flex-grow bg-blue-600 hover:bg-blue-500 text-white font-bold rounded-lg transition-colors shadow-lg shadow-blue-900/20 disabled:opacity-50 disabled:bg-neutral-700 disabled:text-neutral-500 disabled:cursor-not-allowed flex items-center justify-center gap-2"
+              disabled={data || loading} 
+              className="w-full h-full bg-blue-600 hover:bg-blue-500 text-white font-bold rounded-lg transition-colors shadow-lg shadow-blue-900/20 disabled:opacity-50 disabled:bg-neutral-700 disabled:text-neutral-500 disabled:cursor-not-allowed flex items-center justify-center gap-2"
             >
               {loading ? (
                 <>
@@ -87,11 +137,11 @@ const Dashboard = () => {
               )}
             </button>
             
-            {/* RESET BUTTON - Becomes the Primary Action */}
+            {/* RESET BUTTON */}
             {data && (
               <button 
                 onClick={handleClear}
-                className="px-6 bg-blue-600 hover:bg-blue-500 text-white font-bold rounded-lg transition-colors shadow-lg"
+                className="w-full h-full bg-blue-600 hover:bg-blue-500 text-white font-bold rounded-lg transition-colors shadow-lg flex items-center justify-center"
               >
                 RESET
               </button>
@@ -194,7 +244,17 @@ const Dashboard = () => {
                     {data.analysis.airspace_warnings.map((w, i) => <li key={i}>{w}</li>)}
                 </ul>
             ) : (
-                <p className="text-green-500 font-bold text-sm">✅ No major restrictions detected.</p>
+                <div className="space-y-2">
+                    <p className="text-gray-400 text-sm">
+                        <span className="text-yellow-500 font-bold">⚠️ LIMITATION:</span> Checked Permanent Prohibited Zones only (P-40, DC SFRA, etc).
+                    </p>
+                    <p className="text-xs text-neutral-500">
+                        This tool DOES NOT check dynamic TFRs (VIP, Fire, Stadiums). 
+                        <a href="https://tfr.faa.gov/" target="_blank" rel="noreferrer" className="text-blue-400 underline ml-1 hover:text-blue-300">
+                            Verify officially at tfr.faa.gov
+                        </a>
+                    </p>
+                </div>
             )}
           </div>
 
