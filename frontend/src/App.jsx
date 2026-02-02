@@ -31,10 +31,6 @@ function App() {
             isScrolled ? 'bg-black/90 backdrop-blur-md py-2 shadow-2xl' : 'bg-neutral-900/50 backdrop-blur-sm py-4 md:py-8'
           }`}
         >
-          {/* LAYOUT FIX: 
-             We use 'items-end' to stick the menu to the bottom of the container, 
-             aligning it with the bottom of the Big Logo.
-          */}
           <div className="max-w-5xl mx-auto px-4 md:px-6 flex flex-row justify-between items-end">
             
             {/* LOGO AREA */}
@@ -48,7 +44,6 @@ function App() {
                    />
                 ) : (
                    // TOP STATE (Square Logo)
-                   // Mobile: w-20 (80px) | Desktop: w-52 (208px) - Big but not screen-breaking
                    <img 
                      src="/logo-square.webp" 
                      alt="GoNoGo Logo" 
@@ -58,10 +53,6 @@ function App() {
             </Link>
 
             {/* NAVIGATION MENU */}
-            {/* Mobile: text-[10px], tight gap (gap-3) 
-               Desktop: text-xs, wider gap (gap-6)
-               Aligns to bottom of header due to parent 'items-end'
-            */}
             <nav className={`flex gap-3 md:gap-6 font-bold uppercase tracking-widest text-neutral-400 transition-all duration-300 pb-1 ${
                 isScrolled ? 'text-[10px] md:text-xs' : 'text-[10px] md:text-xs'
             }`}>
@@ -74,7 +65,7 @@ function App() {
           </div>
         </header>
 
-        {/* SPACER - Pushes content down so it isn't hidden behind the fixed header */}
+        {/* SPACER */}
         <div className={`transition-all duration-300 ${isScrolled ? 'pt-20' : 'pt-32 md:pt-80'}`}></div>
 
         {/* MAIN CONTENT */}
@@ -94,8 +85,10 @@ function App() {
 
         {/* FOOTER */}
         <footer className="w-full py-8 text-center border-t border-neutral-800 bg-black text-xs text-neutral-600 space-y-4 relative z-10">
-          <p>GoNoGo AI v0.3 • Built for Pilots</p>
-          <div>
+          <p>&copy; {new Date().getFullYear()} GoNoGo AI v0.31 • Built for Pilots • All rights reserved</p>
+          <div className="flex flex-col items-center gap-2">
+            <span className="text-neutral-500 italic">Help with server and API costs:</span>
+            
             <a 
               href="#" 
               target="_blank" 
@@ -103,7 +96,7 @@ function App() {
               className="inline-flex items-center gap-2 px-4 py-2 bg-yellow-600/20 hover:bg-yellow-600/30 text-yellow-500 font-bold rounded-full transition-colors border border-yellow-600/50 uppercase tracking-wider text-[10px]"
             >
               <Fuel className="w-3 h-3 md:w-4 md:h-4" strokeWidth={3} />
-              <span>Buy Me a Fuel Top-Up</span>
+              <span>Donate: Buy a Fuel Top-Up</span>
             </a>
           </div>
         </footer>

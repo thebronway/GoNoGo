@@ -8,7 +8,7 @@
 
 ### Try it yourself: **[Live Site](https://gonogoai.conway.im/)**
 
-**Current Version:** `v0.2`  
+**Current Version:** `v0.31`  
 **GitHub:** [thebronway/GoNoGo](https://github.com/thebronway/GoNoGo)  
 
 

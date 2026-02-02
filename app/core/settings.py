@@ -48,5 +48,4 @@ class SettingsManager:
             print(f"SETTINGS WRITE ERROR: {e}")
             return False
 
-# Global Instance
 settings = SettingsManager()

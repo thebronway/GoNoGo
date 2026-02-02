@@ -59,7 +59,7 @@ const Dashboard = () => {
     } catch (err) {
       if (err.apiMessage) setError(err.apiMessage);
       else if (err.message && err.message !== "Failed to fetch") setError(err.message);
-      else setError("Failed to connect to API. Ensure Docker is running.");
+      else setError("Failed to connect to API.");
     } finally {
       setLoading(false);
     }
@@ -71,8 +71,6 @@ const Dashboard = () => {
     setError(null);
   };
 
-  // SAFE ACCESS HELPER
-  // Prevents "White Screen" crashes if 'bubbles' or 'timeline' are missing
   const analysis = data?.analysis || {};
   const timeline = analysis.timeline || {};
   const bubbles = analysis.bubbles || {};
@@ -88,8 +86,8 @@ const Dashboard = () => {
         </h2>
         <div className="h-px bg-gradient-to-r from-transparent via-neutral-800 to-transparent w-full my-6"></div>
         <p className="text-neutral-400 text-sm max-w-2xl mx-auto leading-relaxed">
-          Enter an Airport ICAO code (e.g. <strong className="text-white">KBWI</strong>, <strong className="text-white">2W5</strong>) 
-          and select your aircraft profile below.
+          Enter an Airport ICAO (e.g. <strong className="text-white">KBWI</strong>) or LID code (e.g. <strong className="text-white">2W5</strong>) 
+          <br />and select your aircraft profile (crosswind tolerance) below.
         </p>
       </div>
 
@@ -188,7 +186,7 @@ const Dashboard = () => {
             </div>
           )}
 
-          {/* BUBBLES - Added Optional Chaining '?.' to prevent crash */}
+          {/* BUBBLES */}
           <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
             <Bubble label="CATEGORY" value={analysis.flight_category} highlight={true} />
             <Bubble label="WIND" value={bubbles?.wind || "--"} risk={analysis.wind_risk} />

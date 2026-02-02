@@ -52,7 +52,7 @@ async def analyze_flight(request: AnalysisRequest, raw_request: Request, backgro
         # 1. CACHE CHECK (First Priority - Free/Unlimited)
         cached_result = get_cached_report(input_icao, request.plane_size)
         if cached_result:
-            status = "CACHE_HIT" # <--- THIS IS THE MISSING LINE
+            status = "CACHE_HIT"
             duration = time.time() - start_time
             log_attempt(
                 client_id=client_id, 
@@ -70,8 +70,6 @@ async def analyze_flight(request: AnalysisRequest, raw_request: Request, backgro
         try:
             await limiter(raw_request)
         except HTTPException as re:
-            # NUCLEAR OPTION: Direct send. Bypass DB rules. Bypass Async.
-            # This forces the email to go out NOW before the 429 is returned.
             print(f"DEBUG: Rate Limit Hit. Forcing Email to {client_id}...")
             try:
                 notifier._send_email(
@@ -125,7 +123,7 @@ async def analyze_flight(request: AnalysisRequest, raw_request: Request, backgro
                     break
         
         if not weather_data:
-            error_msg = "No weather data found."
+            error_msg = "No airport or weather data found. Please try again."
             return {"error": error_msg}
 
         notams = await get_notams(input_icao)
@@ -184,8 +182,6 @@ async def analyze_flight(request: AnalysisRequest, raw_request: Request, backgro
                 model=model_used,
                 tokens=tokens_used
             )
-
-# --- ADMIN ENDPOINTS (Keep these exactly as they were) ---
 
 @router.get("/api/logs")
 async def get_logs(limit: int = 100):

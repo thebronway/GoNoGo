@@ -2,8 +2,6 @@ import React, { useEffect, useState } from 'react';
 import AdminLayout from './AdminLayout';
 import { Save, Activity, Mail, Server, ShieldAlert, PauseCircle, CheckCircle2, Send, Zap } from 'lucide-react';
 
-// --- SUB-COMPONENTS (Moved OUTSIDE to fix Focus Bug) ---
-
 const ConfigInput = ({ label, confKey, value, onChange, onSave, saving, type = "text", placeholder }) => (
   <div className="mb-4">
     <label className="block text-[10px] uppercase text-neutral-500 font-bold mb-1">{label}</label>

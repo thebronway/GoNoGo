@@ -6,7 +6,6 @@ from app.core.logger import DB_PATH
 
 class RateLimiter:
     def __init__(self):
-        # Exempt networks (Localhost, Docker internal)
         self.exempt_networks = [
             ipaddress.ip_network("127.0.0.0/8"),
             ipaddress.ip_network("::1/128"),
@@ -69,7 +68,6 @@ class RateLimiter:
             conn.close()
 
             if count >= max_calls:
-                # RESTORED ORIGINAL MESSAGE
                 raise HTTPException(
                     status_code=429, 
                     detail=(
