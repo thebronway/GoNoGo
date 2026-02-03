@@ -15,9 +15,10 @@ class RateLimiter:
     async def __call__(self, request: Request):
         try:
             # Force refresh from cache to ensure "1" applies instantly
-            # (Settings are cached in memory, so this is fast)
-            max_calls = int(settings.get("rate_limit_calls", 5))
-            period = int(settings.get("rate_limit_period", 300))
+            max_calls_val = await settings.get("rate_limit_calls", 5)
+            period_val = await settings.get("rate_limit_period", 300)
+            max_calls = int(max_calls_val)
+            period = int(period_val)
         except:
             max_calls = 5
             period = 300

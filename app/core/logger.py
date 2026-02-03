@@ -14,9 +14,12 @@ async def log_attempt(client_id, ip, input_icao, resolved_icao, plane, duration,
         )
     """
     
+    # FIX: Use Naive UTC to match the "TIMESTAMP" column in Postgres (No Timezone)
+    # This aligns with the query in admin.py and prevents format mismatch errors
+    now_naive = datetime.datetime.now(datetime.timezone.utc).replace(tzinfo=None)
+    
     values = {
-        # FIX: Use Aware UTC (Ensures JSON serialization adds "Z")
-        "timestamp": datetime.datetime.now(datetime.timezone.utc),
+        "timestamp": now_naive,
         "client_id": client_id,
         "ip_address": ip,
         "input_icao": input_icao,
@@ -31,5 +34,6 @@ async def log_attempt(client_id, ip, input_icao, resolved_icao, plane, duration,
 
     try:
         await database.execute(query=query, values=values)
+        print(f"📝 LOGGED: {input_icao} | {status}") # Verification print
     except Exception as e:
-        print(f"LOGGING FAILURE: {e}")
+        print(f"❌ LOGGING FAILURE: {e}")

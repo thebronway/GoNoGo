@@ -94,7 +94,7 @@ async def analyze_risk(icao_code, weather_data, notams, plane_size="small", repo
     """
 
     try:
-        model_id = settings.get("openai_model", "gpt-4o-mini")
+        model_id = await settings.get("openai_model", "gpt-4o-mini")
 
         response = await client.chat.completions.create(
             model=model_id,

@@ -20,5 +20,10 @@ COPY ./app ./app
 # Copy Built Frontend from Stage 1
 COPY --from=build-frontend /frontend_build/dist /app/static
 
+# Security: Create non-root user
+RUN useradd -m -u 1000 appuser && \
+    chown -R appuser:appuser /app
+USER appuser
+
 # Run it
 CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "4642", "--workers", "5"]

@@ -1,32 +1,53 @@
 import json
-from app.core.db import database
+from app.core.db import database, redis_client
 
 class SettingsManager:
-    # In-memory cache to reduce DB hits
-    _cache = {}
-
     async def load(self):
-        """Populate cache from DB on startup"""
-        query = "SELECT key, value FROM system_settings"
-        rows = await database.fetch_all(query=query)
-        self._cache = {row["key"]: row["value"] for row in rows}
+        pass
 
-    def get(self, key, default=None):
-        # We read from memory (fast), no await needed for reading
-        return self._cache.get(key, default)
+    async def get(self, key, default=None):
+        # 1. Try Redis
+        try:
+            val = await redis_client.get(f"setting:{key}")
+            if val is not None:
+                return val
+        except Exception:
+            pass
+        
+        # 2. Try DB
+        query = "SELECT value FROM system_settings WHERE key = :key"
+        row = await database.fetch_one(query=query, values={"key": key})
+        
+        if row:
+            val = row["value"]
+            # 3. Backfill Redis (TTL 60s)
+            try:
+                await redis_client.setex(f"setting:{key}", 60, val)
+            except Exception: pass
+            return val
+            
+        return default
 
     async def set(self, key, value):
-        # Write to DB asynchronously
+        s_val = str(value)
+        # 1. Write to DB
         query = """
             INSERT INTO system_settings (key, value) VALUES (:key, :value)
             ON CONFLICT (key) DO UPDATE SET value = :value
         """
-        await database.execute(query=query, values={"key": key, "value": str(value)})
-        self._cache[key] = str(value) # Update local cache
+        await database.execute(query=query, values={"key": key, "value": s_val})
+        
+        # 2. Write to Redis
+        try:
+            await redis_client.setex(f"setting:{key}", 60, s_val)
+        except Exception: pass
+        
         return True
 
+    # --- THIS WAS MISSING AND CAUSING THE CRASH ---
     async def get_all_rules(self):
         """Fetch notification rules"""
+        # The table exists now (you created it), so this will work.
         query = "SELECT * FROM notification_rules"
         rows = await database.fetch_all(query)
         return [dict(row) for row in rows]

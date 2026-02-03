@@ -12,7 +12,7 @@ class ReportRequest(BaseModel):
     email: Optional[str] = None
     context: Optional[Dict[str, Any]] = None
     # Honeypot: If this is filled, it's a bot.
-    website: Optional[str] = None 
+    fax_number: Optional[str] = None
 
 @router.post("/report")
 async def submit_report(data: ReportRequest, request: Request, background_tasks: BackgroundTasks):
@@ -20,7 +20,7 @@ async def submit_report(data: ReportRequest, request: Request, background_tasks:
     await limiter(request)
 
     # 2. Honeypot Check (Silent Fail for Bots)
-    if data.website:
+    if data.fax_number:
         print(f"DEBUG: Bot detected via honeypot from {request.client.host}")
         return {"status": "success"} 
 

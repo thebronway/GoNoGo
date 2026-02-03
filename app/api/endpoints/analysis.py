@@ -29,36 +29,41 @@ def parse_metar_time(metar_str):
     Returns a datetime object (UTC) or None if parsing fails.
     """
     if not metar_str: return None
-    # Regex for DDHHMMZ
     match = re.search(r'\b(\d{2})(\d{2})(\d{2})Z\b', metar_str)
     if not match: return None
     
     day, hour, minute = map(int, match.groups())
-    now = datetime.datetime.utcnow()
+    
+    # Use Aware UTC
+    now = datetime.datetime.now(datetime.timezone.utc)
     
     try:
         dt = now.replace(day=day, hour=hour, minute=minute, second=0, microsecond=0)
-        # Handle month boundary (e.g., today is 1st, METAR is 31st)
-        if day > now.day + 1:
-            # Likely previous month
-            if now.month == 1:
-                dt = dt.replace(year=now.year - 1, month=12)
-            else:
-                dt = dt.replace(month=now.month - 1)
-        # Handle future drift (e.g. today is 31st, METAR says 1st)
-        elif day < now.day - 1:
-             if now.month == 12:
-                 dt = dt.replace(year=now.year + 1, month=1)
-             else:
-                 dt = dt.replace(month=now.month + 1)
-        return dt
     except ValueError:
-        return None
+        # Handle month boundary (e.g. today is 1st, report is 31st)
+        # We try to create the date using last month
+        first_of_month = now.replace(day=1)
+        last_month = first_of_month - datetime.timedelta(days=1)
+        try:
+            dt = last_month.replace(day=day, hour=hour, minute=minute, second=0, microsecond=0)
+        except ValueError:
+            return None
+
+    # Handle future drift (e.g. today is 31st, METAR says 1st)
+    # If the calculated date is more than 15 days in the future, it belongs to the previous month.
+    if dt > now + datetime.timedelta(days=15):
+        if dt.month == 1:
+            dt = dt.replace(year=dt.year - 1, month=12)
+        else:
+            dt = dt.replace(month=dt.month - 1)
+            
+    return dt
 
 @router.post("/analyze")
 async def analyze_flight(request: AnalysisRequest, raw_request: Request, background_tasks: BackgroundTasks):
-    if settings.get("global_pause") == "true":
-        msg = settings.get("global_pause_message", "System is under maintenance.")
+    is_paused = await settings.get("global_pause")
+    if is_paused == "true":
+        msg = await settings.get("global_pause_message", "System is under maintenance.")
         raise HTTPException(status_code=503, detail=msg)
 
     t_start = time.time()
@@ -179,19 +184,18 @@ async def analyze_flight(request: AnalysisRequest, raw_request: Request, backgro
         }
 
         # --- SMART CACHING STRATEGY ---
-        now = datetime.datetime.utcnow()
+        # FIX: Use Aware UTC to match the METAR parser and avoid TypeError
+        now = datetime.datetime.now(datetime.timezone.utc)
         current_minute = now.minute
         should_cache = True
+        ttl = 300 # Default fallback
         
         # 1. STANDARD WINDOW (:00 to :50)
-        # Goal: Cache ONLY until minute 50.
-        # Example: At :10, cache for 40 mins. At :40, cache for 10 mins.
         if current_minute < 50:
             minutes_until_update = 50 - current_minute
             ttl = minutes_until_update * 60
             
         # 2. DANGER ZONE (:50 to :59)
-        # Goal: Verify freshness. If fresh, cache long. If stale, don't cache.
         else:
             metar_dt = parse_metar_time(weather_data['metar'])
             if metar_dt:
@@ -210,24 +214,6 @@ async def analyze_flight(request: AnalysisRequest, raw_request: Request, backgro
                     should_cache = False
             else:
                 # Parsing failed, be conservative
-                should_cache = False
-            # DANGER ZONE: Check METAR freshness
-            metar_dt = parse_metar_time(weather_data['metar'])
-            if metar_dt:
-                # Is the METAR from the current hour?
-                # (Allow 5 min tolerance for clock drift/processing)
-                is_fresh = (metar_dt.hour == now.hour) or \
-                           (metar_dt > now - datetime.timedelta(minutes=15))
-                
-                if is_fresh:
-                    # FRESH REPORT: Cache for 60 mins (Safe!)
-                    ttl = 60 * 60
-                else:
-                    # STALE REPORT (Previous hour): Do NOT cache.
-                    # This forces the next user to re-check for the new report.
-                    should_cache = False
-            else:
-                # Could not parse time; be conservative and do not cache in danger zone
                 should_cache = False
 
         if should_cache:
@@ -271,7 +257,9 @@ async def analyze_flight(request: AnalysisRequest, raw_request: Request, backgro
 async def get_public_system_status():
     """Public endpoint to fetch banner and non-sensitive status"""
     from app.core.settings import settings
+    banner_enabled = await settings.get("banner_enabled")
+    banner_msg = await settings.get("banner_message", "")
     return {
-        "banner_enabled": settings.get("banner_enabled") == "true",
-        "banner_message": settings.get("banner_message", "")
+        "banner_enabled": banner_enabled == "true",
+        "banner_message": banner_msg
     }

@@ -171,16 +171,16 @@ const Settings = () => {
                     <PauseCircle className={settings.global_pause === "true" ? 'text-red-500' : 'text-neutral-600'} />
                 </div>
                 <div className="flex items-center gap-4">
-                     <button 
+                      <button 
                         onClick={toggleGlobalPause} 
                         className={`flex-1 py-2 rounded font-bold text-xs uppercase tracking-wider ${
                             settings.global_pause === "true" 
                             ? 'bg-red-600 hover:bg-red-500 text-white shadow-lg shadow-red-900/50' 
                             : 'bg-green-600 hover:bg-green-500 text-white'
                         }`}
-                     >
-                        {settings.global_pause === "true" ? "RESUME SYSTEM" : "SYSTEM ACTIVE"}
-                     </button>
+                      >
+                         {settings.global_pause === "true" ? "RESUME SYSTEM" : "SYSTEM ACTIVE"}
+                      </button>
                 </div>
                 {settings.global_pause === "true" && (
                     <div className="mt-4">
@@ -244,7 +244,7 @@ const Settings = () => {
                 </div>
                 
                 <div className="space-y-4">
-                     <div className="bg-black/40 p-3 rounded border border-neutral-800">
+                      <div className="bg-black/40 p-3 rounded border border-neutral-800">
                         <div className="flex justify-between items-center mb-2">
                             <span className="text-xs font-bold text-white">Rate Limit Hit</span>
                         </div>
@@ -264,7 +264,7 @@ const Settings = () => {
                     </div>
                     
                     {/* NEW: USER REPORTS */}
-                     <div className="bg-black/40 p-3 rounded border border-neutral-800 border-blue-900/30">
+                      <div className="bg-black/40 p-3 rounded border border-neutral-800 border-blue-900/30">
                         <span className="text-xs font-bold text-blue-400 block mb-2">User Reports (Feedback)</span>
                         <div className="flex flex-wrap gap-2">
                             <ToggleCell eventType="user_report" channel="smtp" label="Email" rules={rules} onToggle={handleToggleRule} />
@@ -272,7 +272,7 @@ const Settings = () => {
                             <ToggleCell eventType="user_report" channel="slack" label="Slack" rules={rules} onToggle={handleToggleRule} />
                         </div>
                     </div>
-                     <div className="bg-black/40 p-3 rounded border border-neutral-800 border-red-900/30">
+                      <div className="bg-black/40 p-3 rounded border border-neutral-800 border-red-900/30">
                         <span className="text-xs font-bold text-red-400 block mb-2">API Outage (OpenAI/FAA)</span>
                         <div className="flex flex-wrap gap-2">
                             <ToggleCell eventType="api_outage" channel="smtp" label="Email" rules={rules} onToggle={handleToggleRule} />
@@ -283,7 +283,7 @@ const Settings = () => {
                 </div>
                 
                 <div className="mt-4 flex gap-2 justify-end border-t border-neutral-800 pt-3">
-                     <button onClick={() => handleTestNotification('discord')} className="text-[10px] bg-[#5865F2]/20 text-[#5865F2] border border-[#5865F2]/50 hover:bg-[#5865F2]/30 px-2 py-1 rounded flex items-center gap-1">
+                      <button onClick={() => handleTestNotification('discord')} className="text-[10px] bg-[#5865F2]/20 text-[#5865F2] border border-[#5865F2]/50 hover:bg-[#5865F2]/30 px-2 py-1 rounded flex items-center gap-1">
                         <Zap size={10} /> Test Discord
                     </button>
                     <button onClick={() => handleTestNotification('slack')} className="text-[10px] bg-[#E01E5A]/20 text-[#E01E5A] border border-[#E01E5A]/50 hover:bg-[#E01E5A]/30 px-2 py-1 rounded flex items-center gap-1">

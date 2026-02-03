@@ -24,7 +24,11 @@ const AdminDashboard = () => {
         if (statRes.ok) setStats(await statRes.json());
         if (setRes.ok) {
             const sData = await setRes.json();
-            const foundTz = sData.config.find(c => c.key === "app_timezone");
+            // Handle both structure possibilities safely
+            let foundTz = null;
+            if (Array.isArray(sData.config)) {
+                 foundTz = sData.config.find(c => c.key === "app_timezone");
+            }
             if (foundTz) setTz(foundTz.value);
         }
       } catch (err) {
