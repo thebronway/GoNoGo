@@ -10,11 +10,14 @@ const AdminDashboard = () => {
 
   useEffect(() => {
     const fetchData = async () => {
+      const key = localStorage.getItem("gonogo_admin_key");
+      const headers = { "X-Admin-Key": key };
+
       try {
         const [logRes, statRes, setRes] = await Promise.all([
-            fetch("/api/logs?limit=100"),
-            fetch("/api/stats"),
-            fetch("/api/admin/settings")
+            fetch("/api/logs?limit=100", { headers }),
+            fetch("/api/stats", { headers }),
+            fetch("/api/admin/settings", { headers })
         ]);
         
         if (logRes.ok) setLogs(await logRes.json());
@@ -108,15 +111,12 @@ const AdminDashboard = () => {
     <AdminLayout>
       {loading ? <div className="text-blue-500 animate-pulse">LOADING METRICS...</div> : (
         <div className="space-y-8 animate-fade-in">
-          
-          {/* STATS GRID - UPDATED to 3 Columns */}
           <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
             {stats && ["1h", "24h", "7d", "30d", "60d", "90d"].map(key => (
                stats[key] ? <StatColumn key={key} title={key} data={stats[key]} /> : null
             ))}
           </div>
 
-          {/* LOGS TABLE */}
           <div>
             <h2 className="text-sm font-bold text-neutral-500 mb-3 uppercase tracking-wider">Recent Live Logs ({tz})</h2>
             <div className="border border-neutral-800 rounded bg-neutral-900/20 overflow-x-auto shadow-2xl">

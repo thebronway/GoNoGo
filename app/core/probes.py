@@ -2,6 +2,7 @@ import asyncio
 import httpx
 from app.core.notifications import notifier
 from app.core.ai import client as ai_client
+from app.core.db import database
 
 async def check_faa():
     try:
@@ -24,6 +25,12 @@ async def run_probes():
     """Runs periodically in background"""
     while True:
         await asyncio.sleep(60 * 15) # Check every 15 mins
+
+        try:
+            # Clean logs older than 90 days
+            await database.execute("DELETE FROM logs WHERE timestamp < NOW() - INTERVAL '90 days'")
+        except Exception as e:
+            print(f"CLEANUP ERROR: {e}")
         
         # Check FAA
         if not await check_faa():

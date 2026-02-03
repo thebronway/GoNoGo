@@ -15,8 +15,8 @@ async def log_attempt(client_id, ip, input_icao, resolved_icao, plane, duration,
     """
     
     values = {
-        # FIX: Use naive UTC
-        "timestamp": datetime.datetime.utcnow(),
+        # FIX: Use Aware UTC (Ensures JSON serialization adds "Z")
+        "timestamp": datetime.datetime.now(datetime.timezone.utc),
         "client_id": client_id,
         "ip_address": ip,
         "input_icao": input_icao,

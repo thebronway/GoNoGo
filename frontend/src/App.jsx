@@ -1,36 +1,41 @@
 import React, { useState, useEffect } from 'react';
-import { BrowserRouter as Router, Routes, Route, Link } from 'react-router-dom';
-import { Megaphone, Fuel } from 'lucide-react'; // Added Megaphone
+import { BrowserRouter as Router, Routes, Route, Link, useLocation } from 'react-router-dom';
+import { Megaphone, Fuel } from 'lucide-react'; 
 import Dashboard from './components/Dashboard';
 import AdminDashboard from './components/admin/AdminDashboard';
 import IpManager from './components/admin/IpManager';
 import Settings from './components/admin/Settings';
 import About from './components/About';
 import Disclaimer from './components/Disclaimer';
+import ReportPage from './components/ReportPage';
 import NotFound from './components/NotFound';
 
-function App() {
+// Wrapper component to use hooks inside Router context
+const AppContent = () => {
   const [isScrolled, setIsScrolled] = useState(false);
-  const [banner, setBanner] = useState(null); // Banner State
+  const [banner, setBanner] = useState(null); 
+  const [hasResults, setHasResults] = useState(false); // Track if Dashboard has results
+  const location = useLocation(); // Track current page
 
   useEffect(() => {
     // 1. Handle Scroll
-    const handleScroll = () => setIsScrolled(window.scrollY > 20);
+    const handleScroll = () => setIsScrolled(window.scrollY > 50);
     window.addEventListener('scroll', handleScroll);
 
-    // 2. Fetch Banner Settings
+    // 2. Fetch Banner
     const fetchBanner = async () => {
         try {
-            const res = await fetch("/api/admin/settings");
+            const res = await fetch("/api/system-status");
             if(res.ok) {
                 const data = await res.json();
-                const enabled = data.config.find(c => c.key === "banner_enabled")?.value === "true";
-                const message = data.config.find(c => c.key === "banner_message")?.value;
-                if(enabled && message) setBanner(message);
-                else setBanner(null);
+                if(data.banner_enabled && data.banner_message) {
+                    setBanner(data.banner_message);
+                } else {
+                    setBanner(null);
+                }
             }
         } catch(e) {
-            console.error("Failed to load settings", e);
+            console.error("Failed to load system status", e);
         }
     };
     fetchBanner();
@@ -38,33 +43,38 @@ function App() {
     return () => window.removeEventListener('scroll', handleScroll);
   }, []);
 
+  // --- LOGO VISIBILITY LOGIC ---
+  const isHomePage = location.pathname === '/';
+  // Show logo if: We are NOT on home page OR we scrolled OR we have search results
+  const showLogo = !isHomePage || isScrolled || hasResults;
+
   return (
-    <Router>
       <div className="flex flex-col min-h-screen bg-neutral-900 text-gray-200 font-sans">
         
         {/* HEADER */}
         <header 
-          className={`fixed top-0 left-0 right-0 z-50 transition-all duration-300 border-b border-neutral-800 ${
-            isScrolled ? 'bg-black/90 backdrop-blur-md py-2 shadow-2xl' : 'bg-neutral-900/50 backdrop-blur-sm py-4 md:py-8'
+          className={`fixed top-0 left-0 right-0 z-50 transition-all duration-300 border-b ${
+            isScrolled 
+                ? 'bg-black/90 backdrop-blur-md py-2 shadow-2xl border-neutral-800' 
+                : 'bg-transparent py-4 md:py-8 border-transparent'
           }`}
         >
-          <div className="max-w-5xl mx-auto px-4 md:px-6 flex flex-row justify-between items-end">
+          <div className="max-w-5xl mx-auto px-4 md:px-6 flex flex-row justify-between items-center h-10 md:h-12">
             
             {/* LOGO AREA */}
-            <Link to="/" className="group relative flex items-center gap-3">
-                {isScrolled ? (
-                   <img src="/logo-flat.webp" alt="GoNoGo Logo" className="h-8 md:h-10 w-auto object-contain transition-all" />
-                ) : (
-                   <img src="/logo-square.webp" alt="GoNoGo Logo" className="w-28 h-28 md:w-44 md:h-44 rounded-xl shadow-2xl group-hover:scale-[1.02] transition-transform duration-300 origin-bottom-left" />
-                )}
+            <Link 
+                to="/" 
+                className={`group relative flex items-center transition-all duration-500 ${
+                    showLogo ? 'opacity-100 translate-y-0' : 'opacity-0 -translate-y-2 pointer-events-none'
+                }`}
+            >
+               <img src="/logo-flat.webp" alt="GoNoGo Logo" className="h-8 md:h-10 w-auto object-contain" />
             </Link>
 
             {/* NAVIGATION MENU */}
-            <nav className={`flex gap-3 md:gap-6 font-bold uppercase tracking-widest text-neutral-400 transition-all duration-300 pb-1 ${
-                isScrolled ? 'text-[10px] md:text-xs' : 'text-[10px] md:text-xs'
-            }`}>
+            <nav className="flex gap-2 md:gap-8 font-bold uppercase tracking-wide md:tracking-widest text-neutral-400 text-[9px] md:text-xs whitespace-nowrap">
                <Link to="/" className="hover:text-white hover:text-blue-400 transition-colors">Home</Link>
-               <Link to="/" className="hover:text-white hover:text-blue-400 transition-colors">Report</Link>
+               <Link to="/report" className="hover:text-white hover:text-blue-400 transition-colors">Report</Link>
                <Link to="/about" className="hover:text-white hover:text-blue-400 transition-colors">About</Link>
                <Link to="/disclaimer" className="hover:text-white hover:text-blue-400 transition-colors">Disclaimer</Link>
             </nav>
@@ -73,9 +83,9 @@ function App() {
         </header>
 
         {/* SPACER */}
-        <div className={`transition-all duration-300 ${isScrolled ? 'pt-20' : 'pt-32 md:pt-80'}`}></div>
+        <div className="pt-24 md:pt-32"></div>
 
-        {/* SITE-WIDE BANNER (NEW) */}
+        {/* SITE-WIDE BANNER */}
         {banner && (
             <div className="max-w-5xl mx-auto px-4 md:px-6 w-full mb-6 animate-fade-in">
                 <div className="bg-blue-900/20 border border-blue-800 text-blue-300 px-4 py-3 rounded-lg flex items-center gap-3 shadow-lg backdrop-blur-md">
@@ -88,9 +98,11 @@ function App() {
         {/* MAIN CONTENT */}
         <main className="flex-grow w-full p-4 md:p-6 relative z-0">
            <Routes>
-             <Route path="/" element={<Dashboard />} />
+             {/* Pass setHasResults to Dashboard so it can tell us when to show the logo */}
+             <Route path="/" element={<Dashboard onSearchStateChange={setHasResults} />} />
              <Route path="/about" element={<About />} />
              <Route path="/disclaimer" element={<Disclaimer />} />
+             <Route path="/report" element={<ReportPage />} />
              
              {/* Admin Routes */}
              <Route path="/admin" element={<AdminDashboard />} />
@@ -104,7 +116,7 @@ function App() {
 
         {/* FOOTER */}
         <footer className="w-full py-8 text-center border-t border-neutral-800 bg-black text-xs text-neutral-600 space-y-4 relative z-10">
-          <p>&copy; {new Date().getFullYear()} GoNoGo AI v0.4 • Built for Pilots • All rights reserved</p>
+          <p>&copy; {new Date().getFullYear()} GoNoGo AI v0.5 • Built for Pilots • All rights reserved</p>
           <div className="flex flex-col items-center gap-2">
             <span className="text-neutral-500 italic">Help with server and API costs:</span>
             <a 
@@ -119,6 +131,13 @@ function App() {
           </div>
         </footer>
       </div>
+  );
+};
+
+function App() {
+  return (
+    <Router>
+      <AppContent />
     </Router>
   );
 }

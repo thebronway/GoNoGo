@@ -1,8 +1,14 @@
 import React from 'react';
+import SEO from './SEO';
 
 const About = () => {
   return (
     <div className="max-w-3xl mx-auto text-gray-300 space-y-8 pt-10 px-4">
+      <SEO 
+        title="About - GoNoGo AI"
+        description="Learn about the mission behind GoNoGo AI: A tool built by pilots to modernize preflight weather briefings."
+        path="/about"
+      />
       
       {/* HEADER */}
       <div className="space-y-2 border-b border-neutral-800 pb-6">

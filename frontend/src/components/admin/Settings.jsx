@@ -52,9 +52,15 @@ const Settings = () => {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(null);
 
+  // Helper for Headers
+  const getHeaders = () => ({
+      "Content-Type": "application/json",
+      "X-Admin-Key": localStorage.getItem("gonogo_admin_key")
+  });
+
   const fetchData = async () => {
     try {
-      const res = await fetch("/api/admin/settings");
+      const res = await fetch("/api/admin/settings", { headers: getHeaders() });
       if (res.ok) {
         const data = await res.json();
         const settingsMap = {};
@@ -81,7 +87,7 @@ const Settings = () => {
     try {
       const res = await fetch("/api/admin/settings", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: getHeaders(),
         body: JSON.stringify({ key, value })
       });
       if (res.ok) setTimeout(() => setSaving(null), 1000);
@@ -91,16 +97,12 @@ const Settings = () => {
     }
   };
 
-  // NEW: Optimized Toggle Handler
   const toggleGlobalPause = () => {
       const newValue = settings.global_pause === "true" ? "false" : "true";
-      // 1. Update UI Immediately
       handleChange("global_pause", newValue);
-      // 2. Save in background
       handleSaveConfig("global_pause", newValue);
   };
 
-  // NEW: Banner Toggle
   const toggleBanner = () => {
     const newValue = settings.banner_enabled === "true" ? "false" : "true";
     handleChange("banner_enabled", newValue);
@@ -129,7 +131,7 @@ const Settings = () => {
 
     await fetch("/api/admin/notifications", {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
+      headers: getHeaders(),
       body: JSON.stringify({
         event_type: eventType,
         channels: newChannels,
@@ -143,7 +145,7 @@ const Settings = () => {
     try {
         const res = await fetch("/api/admin/test-notification", {
             method: "POST",
-            headers: { "Content-Type": "application/json" },
+            headers: getHeaders(),
             body: JSON.stringify({ channel })
         });
         if(res.ok) alert("Test Sent!");
@@ -170,7 +172,7 @@ const Settings = () => {
                 </div>
                 <div className="flex items-center gap-4">
                      <button 
-                        onClick={toggleGlobalPause} // UPDATED
+                        onClick={toggleGlobalPause} 
                         className={`flex-1 py-2 rounded font-bold text-xs uppercase tracking-wider ${
                             settings.global_pause === "true" 
                             ? 'bg-red-600 hover:bg-red-500 text-white shadow-lg shadow-red-900/50' 
@@ -187,14 +189,13 @@ const Settings = () => {
                 )}
             </div>
 
-            {/* BANNER CONFIG (NEW) */}
+            {/* BANNER CONFIG */}
             <div className="p-6 bg-neutral-900/50 border border-neutral-800 rounded-xl">
                  <div className="flex items-center justify-between mb-4 border-b border-neutral-800 pb-2">
                     <div className="flex items-center gap-2">
                         <Megaphone size={18} className="text-orange-400" />
                         <h3 className="font-bold text-white">Site Banner</h3>
                     </div>
-                    {/* TOGGLE SWITCH */}
                     <div 
                         onClick={toggleBanner}
                         className={`w-10 h-5 rounded-full cursor-pointer p-1 transition-colors ${settings.banner_enabled === "true" ? 'bg-blue-600' : 'bg-neutral-700'}`}
@@ -261,7 +262,16 @@ const Settings = () => {
                             <ToggleCell eventType="error" channel="slack" label="Slack" rules={rules} onToggle={handleToggleRule} />
                         </div>
                     </div>
-                     {/* NEW: API OUTAGE ALERTS */}
+                    
+                    {/* NEW: USER REPORTS */}
+                     <div className="bg-black/40 p-3 rounded border border-neutral-800 border-blue-900/30">
+                        <span className="text-xs font-bold text-blue-400 block mb-2">User Reports (Feedback)</span>
+                        <div className="flex flex-wrap gap-2">
+                            <ToggleCell eventType="user_report" channel="smtp" label="Email" rules={rules} onToggle={handleToggleRule} />
+                            <ToggleCell eventType="user_report" channel="discord" label="Discord" rules={rules} onToggle={handleToggleRule} />
+                            <ToggleCell eventType="user_report" channel="slack" label="Slack" rules={rules} onToggle={handleToggleRule} />
+                        </div>
+                    </div>
                      <div className="bg-black/40 p-3 rounded border border-neutral-800 border-red-900/30">
                         <span className="text-xs font-bold text-red-400 block mb-2">API Outage (OpenAI/FAA)</span>
                         <div className="flex flex-wrap gap-2">

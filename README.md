@@ -8,7 +8,7 @@
 
 ### Try it yourself: **[Live Site](https://gonogoai.conway.im/)**
 
-**Current Version:** `v0.4`  
+**Current Version:** `v0.5`  
 **GitHub:** [thebronway/GoNoGo](https://github.com/thebronway/GoNoGo)  
 
 
@@ -23,9 +23,11 @@ My main goal was to dive into AI engineering and learn how to interact with LLMs
 ## Features
 
 * **AI Summary:** Generates an Executive Summary covering VFR/IFR status, wind risk, and runway vectors based on your specific aircraft crosswind tolerance.
+* **Smart Caching:** Intelligent caching strategy that respects METAR update cycles (clears at :50 past the hour) to ensure decision-quality data freshness.
 * **Smart NOTAMs:** Filters through hundreds of raw notices to identify and translate *critical* hazards (closures, lighting) into plain English.
 * **Airspace Alerts:** Checks your proximity to permanent restricted zones (DC SFRA, P-40, Disney, etc.).
 * **Vector Math:** Automatically calculates crosswind components and suggests the best runway.
+* **Contextual Reporting:** Integrated feedback tools allow pilots to flag hallucinations, automatically capturing the exact METAR/TAF snapshot for debugging.
 
 ## Important Notes
 

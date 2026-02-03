@@ -1,22 +1,44 @@
 import json
 import datetime
-from fastapi import APIRouter, HTTPException, BackgroundTasks
+import os
+from fastapi import APIRouter, HTTPException, BackgroundTasks, Depends, Security
+from fastapi.security import APIKeyHeader
 from pydantic import BaseModel
 from app.core.db import database, redis_client
 from app.core.settings import settings
 from app.core.notifications import notifier
 
-router = APIRouter()
+# --- SECURITY CONFIGURATION ---
+API_KEY_NAME = "X-Admin-Key"
+api_key_header = APIKeyHeader(name=API_KEY_NAME, auto_error=False)
+
+async def get_admin_key(api_key_header: str = Security(api_key_header)):
+    secret = os.getenv("ADMIN_SECRET_KEY")
+    if not secret:
+        return 
+    
+    if api_key_header == secret:
+        return
+
+    raise HTTPException(status_code=403, detail="Invalid or missing Admin Key")
+
+# Protect all routes in this file
+router = APIRouter(dependencies=[Depends(get_admin_key)])
 
 # --- 1. STATISTICS (THE CARDS) ---
 @router.get("/stats")
 async def get_stats():
+    # 1. CACHE CHECK (5 Minute TTL)
+    cache_key = "admin_stats_cache"
+    cached_data = await redis_client.get(cache_key)
+    if cached_data:
+        return json.loads(cached_data)
+
     stats = {}
     
-    # FIX: Use utcnow() for Naive timestamps (Matches Postgres)
+    # Use utcnow() for Naive timestamps (Matches Postgres)
     now_naive = datetime.datetime.utcnow()
     
-    # UPDATED: 6 Columns as requested
     intervals = {
         "1h": now_naive - datetime.timedelta(hours=1),
         "24h": now_naive - datetime.timedelta(days=1),
@@ -27,7 +49,6 @@ async def get_stats():
     }
     
     for label, cutoff_time in intervals.items():
-        # Parameterized query to prevent injection
         query_base = "FROM logs WHERE timestamp > :cutoff"
         params = {"cutoff": cutoff_time}
         
@@ -67,6 +88,10 @@ async def get_stats():
             "top_user": f"{top_user['client_id'][:8]}.. ({top_user['c']})" if top_user else "-",
             "top_blocked": f"{blocked['client_id'][:8]}.. ({blocked['c']})" if blocked else "-"
         }
+    
+    # 2. SAVE TO CACHE
+    await redis_client.setex(cache_key, 300, json.dumps(stats))
+    
     return stats
 
 # --- 2. LOGS VIEWER ---
@@ -74,7 +99,16 @@ async def get_stats():
 async def get_logs(limit: int = 100):
     query = "SELECT * FROM logs ORDER BY id DESC LIMIT :limit"
     rows = await database.fetch_all(query=query, values={"limit": limit})
-    return [dict(row) for row in rows]
+    
+    # FIX: Force timestamps to be UTC Aware so Frontend converts them correctly
+    results = []
+    for row in rows:
+        r = dict(row)
+        if r['timestamp'] and r['timestamp'].tzinfo is None:
+            r['timestamp'] = r['timestamp'].replace(tzinfo=datetime.timezone.utc)
+        results.append(r)
+        
+    return results
 
 # --- 3. CLIENT MANAGEMENT & UNBLOCKING ---
 @router.get("/clients")

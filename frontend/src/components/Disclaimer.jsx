@@ -1,9 +1,15 @@
 import React from 'react';
+import SEO from './SEO';
 import { AlertTriangle, ShieldAlert, Database, ServerCrash } from 'lucide-react';
 
 const Disclaimer = () => {
   return (
     <div className="max-w-3xl mx-auto text-gray-300 space-y-8 pt-10 px-4 pb-20">
+      <SEO 
+        title="Disclaimer - GoNoGo AI"
+        description="Important legal disclaimer and operational limitations for using GoNoGo AI. Not a substitute for official briefings."
+        path="/disclaimer"
+      />
       
       {/* HEADER */}
       <div className="space-y-2 border-b border-neutral-800 pb-6">

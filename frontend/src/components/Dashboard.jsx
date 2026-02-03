@@ -1,6 +1,9 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
+import { Link } from 'react-router-dom';
 import Bubble from './Bubble';
-import { TriangleAlert } from 'lucide-react';
+import SEO from './SEO';
+import ReportModal from './ReportModal';
+import { TriangleAlert, Clock, Flag } from 'lucide-react';
 
 const getClientId = () => {
   let id = localStorage.getItem("gonogo_client_id");
@@ -11,12 +14,39 @@ const getClientId = () => {
   return id;
 };
 
-const Dashboard = () => {
+// Helper to parse METAR time (DDHHMMZ)
+const getMetarTime = (metarString, timezone) => {
+  if (!metarString) return null;
+  const match = metarString.match(/\b(\d{2})(\d{2})(\d{2})Z\b/);
+  if (!match) return null;
+
+  const [_, day, hour, minute] = match;
+  const now = new Date();
+  const date = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), parseInt(day), parseInt(hour), parseInt(minute)));
+  
+  // Handle edge case: if day is significantly greater than current day, it's likely previous month
+  if (parseInt(day) > now.getUTCDate() + 1) {
+      date.setUTCMonth(date.getUTCMonth() - 1);
+  }
+
+  const utcString = date.toLocaleTimeString('en-US', { timeZone: 'UTC', hour: '2-digit', minute: '2-digit', hour12: false });
+  const localString = date.toLocaleTimeString('en-US', { timeZone: timezone, hour: '2-digit', minute: '2-digit', hour12: false, timeZoneName: 'short' });
+
+  return { utc: `${day} ${utcString}Z`, local: localString };
+};
+
+const Dashboard = ({ onSearchStateChange }) => {
   const [icao, setIcao] = useState('');
   const [plane, setPlane] = useState('small');
   const [loading, setLoading] = useState(false);
   const [data, setData] = useState(null);
   const [error, setError] = useState(null);
+  const [showReport, setShowReport] = useState(false); // Modal State
+
+  // Reset logo state on mount (hide flat logo when first visiting dashboard)
+  useEffect(() => {
+    if (onSearchStateChange) onSearchStateChange(false);
+  }, []);
 
   const handleAnalyze = async () => {
     if (!icao) return alert("Enter ICAO");
@@ -54,6 +84,8 @@ const Dashboard = () => {
         setError(result.error);
       } else {
         setData(result);
+        // TELL APP TO SHOW FLAT LOGO
+        if (onSearchStateChange) onSearchStateChange(true);
       }
       
     } catch (err) {
@@ -69,15 +101,51 @@ const Dashboard = () => {
     setIcao('');
     setData(null);
     setError(null);
+    // TELL APP TO HIDE FLAT LOGO
+    if (onSearchStateChange) onSearchStateChange(false);
   };
 
   const analysis = data?.analysis || {};
   const timeline = analysis.timeline || {};
   const bubbles = analysis.bubbles || {};
   const raw = data?.raw_data || {};
+  
+  // Calculate Times
+  const metarTimes = getMetarTime(raw.metar, data?.airport_tz || 'UTC');
+
+  // Reusable Report Button
+  const ReportButton = () => (
+    <button 
+        onClick={() => setShowReport(true)}
+        className="text-[10px] flex items-center gap-1 text-neutral-600 hover:text-red-400 transition-colors ml-auto"
+        title="Report hallucination or error"
+    >
+        <Flag size={10} /> Report Issue
+    </button>
+  );
 
   return (
     <div className="max-w-4xl mx-auto space-y-8 pb-12 pt-4">
+      <SEO 
+        title="GoNoGo AI - Pilot Weather & NOTAM Decoder"
+        description="Instant plain-English risk assessments for pilots. Decode METARs, TAFs, and NOTAMs with AI. Free flight planning tool."
+        path="/"
+      />
+
+      {/* HERO SECTION */}
+      {!data && (
+        <div className="flex justify-center mb-6 animate-fade-in">
+           {/* --- HERO LOGO SIZING ---
+               w-32 h-32   = 128px (Mobile)
+               md:w-48 md:h-48 = 192px (Desktop)
+           */}
+           <img 
+             src="/logo-square.webp" 
+             alt="GoNoGo Hero" 
+             className="w-40 h-40 md:w-56 md:h-56 rounded-xl shadow-2xl hover:scale-[1.02] transition-transform duration-500"
+           />
+        </div>
+      )}
       
       {/* SITE DESCRIPTION */}
       <div className="text-center space-y-4 mb-8">
@@ -106,7 +174,7 @@ const Dashboard = () => {
                 value={plane} 
                 onChange={(e) => setPlane(e.target.value)}
                 disabled={data || loading}
-                className="w-full h-full bg-neutral-800 border border-neutral-700 text-white rounded-lg px-4 focus:outline-none focus:border-blue-500 cursor-pointer appearance-none disabled:opacity-50 disabled:cursor-not-allowed"
+                className="w-full h-full bg-neutral-800 border border-neutral-700 text-white rounded-lg pl-4 pr-12 focus:outline-none focus:border-blue-500 cursor-pointer appearance-none disabled:opacity-50 disabled:cursor-not-allowed text-ellipsis overflow-hidden whitespace-nowrap"
             >
                 <option value="small">Small (Max X-Wind: 15kts)</option>
                 <option value="medium">Medium (Max X-Wind: 20kts)</option>
@@ -139,32 +207,61 @@ const Dashboard = () => {
           
           {/* HEADER */}
           <div className="text-center pt-2 space-y-2">
-            <div className="inline-block bg-neutral-800/50 border border-neutral-800 rounded px-3 py-1 mb-4 mt-2">
-                <p className="text-[10px] text-neutral-500 uppercase tracking-wide">
-                    Disclaimer: AI normalizes data and can make errors. Verify with official sources.
+            
+            {/* 1. DISCLAIMER */}
+            <div className="bg-neutral-800 border border-neutral-700 rounded-lg p-3 mb-2 mx-auto max-w-2xl">
+                <p className="text-xs text-gray-400 flex items-center justify-center gap-1">
+                    <TriangleAlert className="w-3 h-3 text-red-500" />
+                    <span className="font-bold text-red-500">DISCLAIMER:</span> 
+                    <span>AI normalizes data and can make errors. Always verify with official sources.</span>
+                    <Link to="/disclaimer" className="underline ml-1 hover:text-white">Read full policy</Link>
                 </p>
             </div>
-            <h1 className="text-4xl md:text-5xl font-black text-white tracking-tight">
+
+            {/* 2. CACHED BANNER */}
+            {data.is_cached && (
+                <div className="bg-neutral-800 border border-neutral-700 rounded-lg p-3 mb-4 mx-auto max-w-2xl animate-fade-in">
+                    <div className="flex flex-col md:flex-row items-center justify-center gap-2 text-xs text-gray-400">
+                        <span className="font-bold flex items-center gap-1 uppercase tracking-wider text-yellow-500">
+                            <Clock className="w-3 h-3" /> Cached Summary
+                        </span>
+                        <span className="hidden md:inline text-neutral-600">•</span>
+                        <span>
+                            Report retrieved recently. METAR unchanged. 
+                            <span className="ml-1 text-neutral-500">Does not count towards rate limits.</span>
+                        </span>
+                    </div>
+                </div>
+            )}
+            
+            {/* 3. AIRPORT NAME */}
+            <h1 className="text-4xl md:text-5xl font-black text-white tracking-tight py-4">
                 {data.airport_name || icao}
             </h1>
-            <div className="flex flex-col items-center justify-center gap-1 text-xs">
-                {raw.weather_source !== icao ? (
-                    <>
-                        <p className="text-orange-400 font-bold flex items-center justify-center gap-2">
-                          <TriangleAlert className="w-4 h-4" /> 
-                          <span>Weather Source: {raw.weather_source}</span>
-                        </p>
-                        <p className="text-neutral-400">Airspace & NOTAMs Source: {icao}</p>
-                    </>
-                ) : (
-                    <p className="text-neutral-500 uppercase tracking-widest font-bold">Mission Target</p>
-                )}
-            </div>
+
+            {/* 4. TIME DISPLAY */}
+            {metarTimes && (
+                <div className="flex flex-col items-center gap-2 mb-8">
+                    <span className="text-[10px] uppercase tracking-widest text-neutral-500 font-bold">METAR generated at:</span>
+                    <div className="inline-flex items-center justify-center gap-4 text-xs font-mono text-blue-200 bg-blue-900/20 px-6 py-2 rounded-full border border-blue-900/30 shadow-lg shadow-blue-900/10">
+                        <span title="Observation Time (UTC)">
+                            <span className="text-blue-500 font-bold">UTC:</span> {metarTimes.utc}
+                        </span>
+                        <span className="w-px h-3 bg-blue-800/50"></span>
+                        <span title={`Local Time (${data.airport_tz})`}>
+                            <span className="text-blue-500 font-bold">Local:</span> {metarTimes.local}
+                        </span>
+                    </div>
+                </div>
+            )}
           </div>
 
           {/* SUMMARY */}
-          <div className="bg-neutral-800 border border-neutral-700 rounded-xl p-6 shadow-xl">
-            <h3 className="text-xs font-bold text-neutral-500 uppercase tracking-widest mb-3">Mission Summary</h3>
+          <div className="bg-neutral-800 border border-neutral-700 rounded-xl p-6 shadow-xl relative">
+            <div className="flex justify-between items-start mb-3">
+                 <h3 className="text-xs font-bold text-neutral-500 uppercase tracking-widest">Mission Summary</h3>
+                 <ReportButton />
+            </div>
             <p className="text-gray-200 leading-relaxed text-base">{analysis.executive_summary}</p>
           </div>
 
@@ -210,8 +307,11 @@ const Dashboard = () => {
           </div>
 
           {/* AIRSPACE */}
-          <div className="bg-neutral-800 border border-neutral-700 rounded-xl p-6">
-            <h3 className="text-neutral-500 text-xs font-bold uppercase tracking-widest mb-3">Airspace & TFRs</h3>
+          <div className="bg-neutral-800 border border-neutral-700 rounded-xl p-6 relative">
+            <div className="flex justify-between items-start mb-3">
+                <h3 className="text-neutral-500 text-xs font-bold uppercase tracking-widest">Airspace & TFRs</h3>
+                <ReportButton />
+            </div>
             {analysis.airspace_warnings?.length > 0 ? (
                 <ul className="list-disc pl-5 text-orange-400 space-y-2 text-sm">
                     {analysis.airspace_warnings.map((w, i) => <li key={i}>{w}</li>)}
@@ -232,8 +332,11 @@ const Dashboard = () => {
           </div>
 
           {/* NOTAMS */}
-          <div className="bg-neutral-800 border border-neutral-700 rounded-xl p-6">
-            <h3 className="text-neutral-500 text-xs font-bold uppercase tracking-widest mb-3">Critical NOTAMs</h3>
+          <div className="bg-neutral-800 border border-neutral-700 rounded-xl p-6 relative">
+            <div className="flex justify-between items-start mb-3">
+                <h3 className="text-neutral-500 text-xs font-bold uppercase tracking-widest">Critical NOTAMs</h3>
+                <ReportButton />
+            </div>
             {analysis.critical_notams?.length > 0 ? (
                 <ul className="list-disc pl-5 text-yellow-200 space-y-2 text-sm">
                     {analysis.critical_notams.map((n, i) => <li key={i}>{n}</li>)}
@@ -257,6 +360,22 @@ const Dashboard = () => {
               </div>
             </details>
           </div>
+
+      {/* CONTEXTUAL REPORT MODAL */}
+      <ReportModal 
+        isOpen={showReport} 
+        onClose={() => setShowReport(false)} 
+        contextData={data ? {
+            airport: data.airport_name,
+            metar: raw.metar,
+            taf: raw.taf,
+            raw_notams: raw.notams,
+            summary: analysis.executive_summary,
+            airspace_analysis: analysis.airspace_warnings,
+            notam_analysis: analysis.critical_notams,
+            timeline: analysis.timeline
+        } : null}
+      />
 
         </div>
       )}

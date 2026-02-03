@@ -7,9 +7,15 @@ const IpManager = () => {
   const [search, setSearch] = useState("");
   const [loading, setLoading] = useState(true);
 
+  // Helper for Headers
+  const getHeaders = () => ({
+      "Content-Type": "application/json",
+      "X-Admin-Key": localStorage.getItem("gonogo_admin_key")
+  });
+
   const fetchClients = async () => {
     try {
-      const res = await fetch("/api/admin/clients");
+      const res = await fetch("/api/admin/clients", { headers: getHeaders() });
       if (res.ok) setClients(await res.json());
     } catch (err) {
       console.error(err);
@@ -25,7 +31,7 @@ const IpManager = () => {
   const handleUnblock = async (key) => {
     if (!confirm(`Unblock User?`)) return;
     try {
-      // 1. Optimistic Update (Instant Feedback)
+      // 1. Optimistic Update
       setClients(prev => prev.map(client => 
         client.limit_key === key ? { ...client, is_limited: false } : client
       ));
@@ -33,7 +39,7 @@ const IpManager = () => {
       // 2. Perform Request
       const res = await fetch("/api/admin/unblock", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: getHeaders(),
         body: JSON.stringify({ key })
       });
       
