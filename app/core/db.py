@@ -63,6 +63,15 @@ async def init_db_tables():
             await database.execute(query_cache)
             await database.execute(query_settings)
             await database.execute(query_notif)
+            
+            # --- MIGRATION: Add new columns for Enhanced Logging ---
+            # We use 'ADD COLUMN IF NOT EXISTS' which is valid in Postgres
+            try:
+                await database.execute("ALTER TABLE logs ADD COLUMN IF NOT EXISTS weather_icao TEXT")
+                await database.execute("ALTER TABLE logs ADD COLUMN IF NOT EXISTS expiration_timestamp TIMESTAMP")
+            except Exception as ex:
+                print(f"DEBUG: Schema migration warning: {ex}")
+
     except Exception as e:
         # Ignore race conditions during startup (UniqueViolationError)
         # One worker will succeed, the others will fail harmlessly.

@@ -298,7 +298,7 @@ const Settings = () => {
             <div className="p-6 bg-neutral-900/50 border border-neutral-800 rounded-xl">
                 <div className="flex items-center gap-2 mb-4 border-b border-neutral-800 pb-2">
                     <Server size={18} className="text-green-400" />
-                    <h3 className="font-bold text-white">Cost Center</h3>
+                    <h3 className="font-bold text-white">Cost Center (Last 90 Days)</h3>
                 </div>
                 <div className="space-y-4">
                     <div>

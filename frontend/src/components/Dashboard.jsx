@@ -3,7 +3,7 @@ import { Link } from 'react-router-dom';
 import Bubble from './Bubble';
 import SEO from './SEO';
 import ReportModal from './ReportModal';
-import { TriangleAlert, Clock, Flag } from 'lucide-react';
+import { TriangleAlert, Clock, Flag, Info } from 'lucide-react';
 
 const getClientId = () => {
   let id = localStorage.getItem("gonogo_client_id");
@@ -14,7 +14,7 @@ const getClientId = () => {
   return id;
 };
 
-// Helper to parse METAR time (DDHHMMZ)
+// Helper to parse METAR time
 const getMetarTime = (metarString, timezone) => {
   if (!metarString) return null;
   const match = metarString.match(/\b(\d{2})(\d{2})(\d{2})Z\b/);
@@ -24,7 +24,6 @@ const getMetarTime = (metarString, timezone) => {
   const now = new Date();
   const date = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), parseInt(day), parseInt(hour), parseInt(minute)));
   
-  // Handle edge case: if day is significantly greater than current day, it's likely previous month
   if (parseInt(day) > now.getUTCDate() + 1) {
       date.setUTCMonth(date.getUTCMonth() - 1);
   }
@@ -41,9 +40,8 @@ const Dashboard = ({ onSearchStateChange }) => {
   const [loading, setLoading] = useState(false);
   const [data, setData] = useState(null);
   const [error, setError] = useState(null);
-  const [showReport, setShowReport] = useState(false); // Modal State
+  const [showReport, setShowReport] = useState(false);
 
-  // Reset logo state on mount (hide flat logo when first visiting dashboard)
   useEffect(() => {
     if (onSearchStateChange) onSearchStateChange(false);
   }, []);
@@ -84,7 +82,6 @@ const Dashboard = ({ onSearchStateChange }) => {
         setError(result.error);
       } else {
         setData(result);
-        // TELL APP TO SHOW FLAT LOGO
         if (onSearchStateChange) onSearchStateChange(true);
       }
       
@@ -101,7 +98,6 @@ const Dashboard = ({ onSearchStateChange }) => {
     setIcao('');
     setData(null);
     setError(null);
-    // TELL APP TO HIDE FLAT LOGO
     if (onSearchStateChange) onSearchStateChange(false);
   };
 
@@ -110,10 +106,8 @@ const Dashboard = ({ onSearchStateChange }) => {
   const bubbles = analysis.bubbles || {};
   const raw = data?.raw_data || {};
   
-  // Calculate Times
   const metarTimes = getMetarTime(raw.metar, data?.airport_tz || 'UTC');
 
-  // Reusable Report Button
   const ReportButton = () => (
     <button 
         onClick={() => setShowReport(true)}
@@ -132,13 +126,8 @@ const Dashboard = ({ onSearchStateChange }) => {
         path="/"
       />
 
-      {/* HERO SECTION */}
       {!data && (
         <div className="flex justify-center mb-6 animate-fade-in">
-           {/* --- HERO LOGO SIZING ---
-               w-32 h-32   = 128px (Mobile)
-               md:w-48 md:h-48 = 192px (Desktop)
-           */}
            <img 
              src="/logo-square.webp" 
              alt="GoNoGo Hero" 
@@ -147,19 +136,17 @@ const Dashboard = ({ onSearchStateChange }) => {
         </div>
       )}
       
-      {/* SITE DESCRIPTION */}
       <div className="text-center space-y-4 mb-8">
         <h2 className="text-xl md:text-2xl font-light text-blue-200 tracking-tight">
           A Preflight App for Pilots to Decode Weather, Airspace and NOTAMs
         </h2>
         <div className="h-px bg-gradient-to-r from-transparent via-neutral-800 to-transparent w-full my-6"></div>
         <p className="text-neutral-400 text-sm max-w-2xl mx-auto leading-relaxed">
-          Enter an Airport ICAO (e.g. <strong className="text-white">KBWI</strong>) or LID code (e.g. <strong className="text-white">2W5</strong>) 
+          Enter an Airport ICAO code (e.g. <strong className="text-white">KBOS</strong>) or LID code (e.g. <strong className="text-white">2W5</strong>) 
           <br />and select your aircraft profile (crosswind tolerance) below.
         </p>
       </div>
 
-      {/* CONTROLS */}
       <div className="flex flex-col md:flex-row gap-4 md:h-14">
         <input 
           value={icao} 
@@ -201,14 +188,11 @@ const Dashboard = ({ onSearchStateChange }) => {
 
       {error && <div className="p-4 bg-red-900/50 text-red-200 border border-red-700 rounded animate-fade-in">{error}</div>}
 
-      {/* RESULTS */}
       {data && analysis && (
         <div className="space-y-8 animate-fade-in">
           
-          {/* HEADER */}
           <div className="text-center pt-2 space-y-2">
             
-            {/* 1. DISCLAIMER */}
             <div className="bg-neutral-800 border border-neutral-700 rounded-lg p-3 mb-2 mx-auto max-w-2xl">
                 <p className="text-xs text-gray-400 flex items-center justify-center gap-1">
                     <TriangleAlert className="w-3 h-3 text-red-500" />
@@ -218,7 +202,6 @@ const Dashboard = ({ onSearchStateChange }) => {
                 </p>
             </div>
 
-            {/* 2. CACHED BANNER */}
             {data.is_cached && (
                 <div className="bg-neutral-800 border border-neutral-700 rounded-lg p-3 mb-4 mx-auto max-w-2xl animate-fade-in">
                     <div className="flex flex-col md:flex-row items-center justify-center gap-2 text-xs text-gray-400">
@@ -234,29 +217,39 @@ const Dashboard = ({ onSearchStateChange }) => {
                 </div>
             )}
             
-            {/* 3. AIRPORT NAME */}
             <h1 className="text-4xl md:text-5xl font-black text-white tracking-tight py-4">
                 {data.airport_name || icao}
             </h1>
 
-            {/* 4. TIME DISPLAY */}
+            {/* METAR TIME & SOURCE DISPLAY */}
             {metarTimes && (
                 <div className="flex flex-col items-center gap-2 mb-8">
-                    <span className="text-[10px] uppercase tracking-widest text-neutral-500 font-bold">METAR generated at:</span>
-                    <div className="inline-flex items-center justify-center gap-4 text-xs font-mono text-blue-200 bg-blue-900/20 px-6 py-2 rounded-full border border-blue-900/30 shadow-lg shadow-blue-900/10">
-                        <span title="Observation Time (UTC)">
-                            <span className="text-blue-500 font-bold">UTC:</span> {metarTimes.utc}
-                        </span>
-                        <span className="w-px h-3 bg-blue-800/50"></span>
-                        <span title={`Local Time (${data.airport_tz})`}>
-                            <span className="text-blue-500 font-bold">Local:</span> {metarTimes.local}
-                        </span>
+                    <span className="text-[10px] uppercase tracking-widest text-neutral-500 font-bold">METAR generated:</span>
+                    
+                    <div className="flex flex-col md:flex-row items-center gap-3">
+                        {/* WARNING PILL (New Option 1) */}
+                        {raw.weather_dist > 0 && (
+                            <div className="inline-flex items-center justify-center gap-2 text-xs font-mono text-yellow-200 bg-yellow-900/30 px-6 py-2 rounded-full border border-yellow-700/50 shadow-lg animate-fade-in">
+                                <Info className="w-3 h-3 text-yellow-500" />
+                                <span>METAR from <span className="font-bold">{raw.weather_source}: {raw.weather_name}</span> ({raw.weather_dist}nm away)</span>
+                            </div>
+                        )}
+
+                        {/* TIME PILL */}
+                        <div className="inline-flex items-center justify-center gap-4 text-xs font-mono text-blue-200 bg-blue-900/20 px-6 py-2 rounded-full border border-blue-900/30 shadow-lg shadow-blue-900/10">
+                            <span title="Observation Time (UTC)">
+                                <span className="text-blue-500 font-bold">UTC:</span> {metarTimes.utc}
+                            </span>
+                            <span className="w-px h-3 bg-blue-800/50"></span>
+                            <span title={`Local Time (${data.airport_tz})`}>
+                                <span className="text-blue-500 font-bold">Local:</span> {metarTimes.local}
+                            </span>
+                        </div>
                     </div>
                 </div>
             )}
           </div>
 
-          {/* SUMMARY */}
           <div className="bg-neutral-800 border border-neutral-700 rounded-xl p-6 shadow-xl relative">
             <div className="flex justify-between items-start mb-3">
                  <h3 className="text-xs font-bold text-neutral-500 uppercase tracking-widest">Mission Summary</h3>
@@ -265,7 +258,6 @@ const Dashboard = ({ onSearchStateChange }) => {
             <p className="text-gray-200 leading-relaxed text-base">{analysis.executive_summary}</p>
           </div>
 
-          {/* TIMELINE */}
           {timeline.t_06 && timeline.t_06 !== "NO_TAF" ? (
              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div className="bg-neutral-800 border border-neutral-700 rounded-xl p-5">
@@ -283,7 +275,6 @@ const Dashboard = ({ onSearchStateChange }) => {
             </div>
           )}
 
-          {/* BUBBLES */}
           <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
             <Bubble label="CATEGORY" value={analysis.flight_category} highlight={true} />
             <Bubble label="WIND" value={bubbles?.wind || "--"} risk={analysis.wind_risk} />
@@ -291,7 +282,6 @@ const Dashboard = ({ onSearchStateChange }) => {
             <Bubble label="VISIBILITY" value={bubbles?.visibility || "--"} />
           </div>
 
-          {/* RAW DATA */}
           <div className="pt-2">
             <details className="group bg-black border border-neutral-800 rounded-lg">
               <summary className="list-none cursor-pointer p-4 text-xs font-bold text-gray-400 hover:text-white transition-colors flex items-center justify-between select-none">
@@ -306,7 +296,6 @@ const Dashboard = ({ onSearchStateChange }) => {
             </details>
           </div>
 
-          {/* AIRSPACE */}
           <div className="bg-neutral-800 border border-neutral-700 rounded-xl p-6 relative">
             <div className="flex justify-between items-start mb-3">
                 <h3 className="text-neutral-500 text-xs font-bold uppercase tracking-widest">Airspace & TFRs</h3>
@@ -331,7 +320,6 @@ const Dashboard = ({ onSearchStateChange }) => {
             )}
           </div>
 
-          {/* NOTAMS */}
           <div className="bg-neutral-800 border border-neutral-700 rounded-xl p-6 relative">
             <div className="flex justify-between items-start mb-3">
                 <h3 className="text-neutral-500 text-xs font-bold uppercase tracking-widest">Critical NOTAMs</h3>
@@ -346,7 +334,6 @@ const Dashboard = ({ onSearchStateChange }) => {
             )}
           </div>
 
-          {/* RAW NOTAMS */}
           <div className="pb-10">
             <details className="group bg-black border border-neutral-800 rounded-lg">
               <summary className="list-none cursor-pointer p-4 text-xs font-bold text-gray-400 hover:text-white transition-colors flex items-center justify-between select-none">
@@ -361,7 +348,6 @@ const Dashboard = ({ onSearchStateChange }) => {
             </details>
           </div>
 
-      {/* CONTEXTUAL REPORT MODAL */}
       <ReportModal 
         isOpen={showReport} 
         onClose={() => setShowReport(false)} 

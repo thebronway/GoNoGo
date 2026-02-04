@@ -38,8 +38,10 @@ async def get_metar_taf(icao_code):
                         "taf": taf.strip()
                     }
             
-            except httpx.RequestError:
-                # Wait 1 second without freezing the server
-                await asyncio.sleep(1)
+            except httpx.RequestError as e:
+                # Exponential Backoff: 1s, 2s, 4s...
+                wait_time = 2 ** (attempt - 1)
+                print(f"DEBUG: Weather API Error ({e}). Retrying in {wait_time}s...")
+                await asyncio.sleep(wait_time)
 
     return None

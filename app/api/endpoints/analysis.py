@@ -24,24 +24,16 @@ class AnalysisRequest(BaseModel):
     plane_size: str
 
 def parse_metar_time(metar_str):
-    """
-    Extracts the day/hour/minute from a METAR string (e.g., '251853Z').
-    Returns a datetime object (UTC) or None if parsing fails.
-    """
     if not metar_str: return None
     match = re.search(r'\b(\d{2})(\d{2})(\d{2})Z\b', metar_str)
     if not match: return None
     
     day, hour, minute = map(int, match.groups())
-    
-    # Use Aware UTC
     now = datetime.datetime.now(datetime.timezone.utc)
     
     try:
         dt = now.replace(day=day, hour=hour, minute=minute, second=0, microsecond=0)
     except ValueError:
-        # Handle month boundary (e.g. today is 1st, report is 31st)
-        # We try to create the date using last month
         first_of_month = now.replace(day=1)
         last_month = first_of_month - datetime.timedelta(days=1)
         try:
@@ -49,14 +41,11 @@ def parse_metar_time(metar_str):
         except ValueError:
             return None
 
-    # Handle future drift (e.g. today is 31st, METAR says 1st)
-    # If the calculated date is more than 15 days in the future, it belongs to the previous month.
     if dt > now + datetime.timedelta(days=15):
         if dt.month == 1:
             dt = dt.replace(year=dt.year - 1, month=12)
         else:
             dt = dt.replace(month=dt.month - 1)
-            
     return dt
 
 @router.post("/analyze")
@@ -71,24 +60,19 @@ async def analyze_flight(request: AnalysisRequest, raw_request: Request, backgro
     client_id = raw_request.headers.get("X-Client-ID", "UNKNOWN")
     client_ip = raw_request.headers.get("X-Forwarded-For", raw_request.client.host).split(',')[0].strip()
     
-    # --- INTERNATIONAL SUPPORT FIX ---
     raw_input = request.icao.upper().strip()
     
-    # 1. Try exact match (International/ICAO)
+    # 1. Try exact match
     if raw_input in airports_icao:
         input_icao = raw_input
-    
-    # 2. Try LID match (e.g. "LAX"), but resolve to ICAO ("KLAX") immediately if possible
+    # 2. Try LID match
     elif raw_input in airports_lid:
         lid_data = airports_lid[raw_input]
         input_icao = lid_data.get('icao') or raw_input
-
-    # 3. Lazy US Pilot Logic (JFK -> KJFK)
+    # 3. Lazy US Pilot Logic
     elif len(raw_input) == 3 and ("K" + raw_input) in airports_icao:
         input_icao = "K" + raw_input
-        
     else:
-        # Fallback
         input_icao = raw_input
     
     resolved_icao = input_icao 
@@ -96,6 +80,10 @@ async def analyze_flight(request: AnalysisRequest, raw_request: Request, backgro
     error_msg = None
     model_used = None
     tokens_used = 0
+    weather_icao = None
+    weather_dist = 0
+    weather_name = None 
+    expiration_dt = None
 
     t_weather = 0
     t_notams = 0
@@ -107,15 +95,27 @@ async def analyze_flight(request: AnalysisRequest, raw_request: Request, backgro
         if cached_result:
             duration = time.time() - t_start
             status = "CACHE_HIT" 
-            await log_attempt(client_id, client_ip, input_icao, resolved_icao, request.plane_size, duration, "CACHE_HIT")
-            # Inject UI Flags
+            
+            raw_data = cached_result.get('raw_data', {})
+            weather_icao = raw_data.get('weather_source', resolved_icao)
+            
+            if 'valid_until' in cached_result:
+                expiration_dt = datetime.datetime.fromtimestamp(cached_result['valid_until'], datetime.timezone.utc)
+            
+            # LOGGING: Revert "Lazy K" for display if necessary
+            output_for_log = resolved_icao
+            if resolved_icao == ("K" + raw_input) and any(char.isdigit() for char in raw_input):
+                output_for_log = raw_input
+
+            await log_attempt(client_id, client_ip, raw_input, output_for_log, request.plane_size, duration, "CACHE_HIT", weather_icao=weather_icao, expiration=expiration_dt)
+            
             cached_result['is_cached'] = True
             return cached_result
 
         # 2. RATE LIMIT CHECK
         await limiter(raw_request)
 
-        # 3. FETCH DATA (PARALLELIZED)
+        # 3. FETCH DATA
         airport_data = airports_icao.get(input_icao) or airports_lid.get(input_icao)
         airport_name = airport_data['name'] if airport_data else input_icao
         if airport_data: resolved_icao = airport_data.get('icao', input_icao)
@@ -125,7 +125,7 @@ async def analyze_flight(request: AnalysisRequest, raw_request: Request, backgro
             try:
                 lat, lon = float(airport_data['lat']), float(airport_data['lon'])
                 airspace_warnings = check_airspace_zones(input_icao, lat, lon)
-            except: pass
+            except Exception: pass
 
         t0_data = time.time()
         
@@ -135,27 +135,40 @@ async def analyze_flight(request: AnalysisRequest, raw_request: Request, backgro
         
         weather_data, notams = await asyncio.gather(weather_task, notams_task)
         
-        total_data_time = time.time() - t0_data
-        t_weather = total_data_time / 2
-        t_notams = total_data_time / 2
+        t_initial_fetch = time.time() - t0_data
+        t_notams = t_initial_fetch 
+        
+        if weather_data:
+            weather_icao = input_icao
+            weather_name = airport_name
         
         # Weather Fallback Logic
-        weather_icao = input_icao
         if not weather_data:
             candidates = await get_nearest_reporting_stations(input_icao)
-            for station in candidates:
+            for station, dist in candidates:
                 data = await get_metar_taf(station)
                 if data:
                     weather_icao = station
+                    weather_dist = dist
                     weather_data = data
+                    
+                    st_data = airports_icao.get(station)
+                    if st_data:
+                        weather_name = st_data.get('name', station)
+                    else:
+                        weather_name = station
                     break
+        
+        t_weather = time.time() - t0_data
         
         if not weather_data:
             return {"error": "No airport or weather data found."}
 
         t0 = time.time()
+        
+        # FIX: Pass the Airport NAME to the AI to prevent "At K2W5..."
         analysis = await analyze_risk(
-            icao_code=input_icao,
+            icao_code=airport_name, 
             weather_data=weather_data,
             notams=notams,
             plane_size=request.plane_size,
@@ -171,7 +184,6 @@ async def analyze_flight(request: AnalysisRequest, raw_request: Request, backgro
 
         response_data = {
             "airport_name": airport_name,
-            # Inject Timezone for UI
             "airport_tz": airport_data.get('tz', 'UTC') if airport_data else 'UTC',
             "is_cached": False,
             "analysis": analysis,
@@ -179,45 +191,36 @@ async def analyze_flight(request: AnalysisRequest, raw_request: Request, backgro
                 "metar": weather_data['metar'],
                 "taf": weather_data['taf'],
                 "notams": notams,
-                "weather_source": weather_icao
+                "weather_source": weather_icao,
+                "weather_dist": round(weather_dist, 1),
+                "weather_name": weather_name
             }
         }
 
-        # --- SMART CACHING STRATEGY ---
-        # FIX: Use Aware UTC to match the METAR parser and avoid TypeError
+        # --- CACHING ---
         now = datetime.datetime.now(datetime.timezone.utc)
         current_minute = now.minute
         should_cache = True
-        ttl = 300 # Default fallback
+        ttl = 300 
         
-        # 1. STANDARD WINDOW (:00 to :50)
         if current_minute < 50:
             minutes_until_update = 50 - current_minute
             ttl = minutes_until_update * 60
-            
-        # 2. DANGER ZONE (:50 to :59)
         else:
             metar_dt = parse_metar_time(weather_data['metar'])
             if metar_dt:
-                # Is the METAR from the current hour?
-                # (Allow 5 min tolerance for clock drift/processing)
                 is_fresh = (metar_dt.hour == now.hour) or \
                            (metar_dt > now - datetime.timedelta(minutes=15))
-                
                 if is_fresh:
-                    # FRESH REPORT CAUGHT! 
-                    # We can safely cache this for 60 mins (until next :50)
                     ttl = 60 * 60
                 else:
-                    # STALE REPORT (Still showing previous hour's data)
-                    # Do NOT cache. Force next user to check for the new one.
                     should_cache = False
             else:
-                # Parsing failed, be conservative
                 should_cache = False
 
         if should_cache:
             await save_cached_report(input_icao, request.plane_size, response_data, ttl_seconds=ttl)
+            expiration_dt = now + datetime.timedelta(seconds=ttl)
         
         status = "SUCCESS"
         return response_data
@@ -225,18 +228,11 @@ async def analyze_flight(request: AnalysisRequest, raw_request: Request, backgro
     except HTTPException as e:
         if e.status_code == 429:
             status = "RATE_LIMIT"
-            print(f"DEBUG: Triggering Rate Limit Alert for {client_ip}...")
             try:
-                await notifier.send_alert(
-                    "rate_limit", 
-                    f"Rate Limit Hit: {input_icao}", 
-                    f"User {client_id} (IP: {client_ip}) exceeded limits."
-                )
-            except Exception as mail_err:
-                print(f"DEBUG: Alert System Failed: {mail_err}")
+                await notifier.send_alert("rate_limit", f"Rate Limit: {input_icao}", f"User {client_id}")
+            except: pass
         else:
             status = "ERROR"
-        
         error_msg = e.detail
         raise e
         
@@ -249,13 +245,17 @@ async def analyze_flight(request: AnalysisRequest, raw_request: Request, backgro
     finally:
         if status != "CACHE_HIT":
             duration = time.time() - t_start
-            print(f"⏱️  PERFORMANCE: {input_icao} | Total: {duration:.2f}s | Wx: {t_weather:.2f}s | NOTAMs: {t_notams:.2f}s | AI: {t_ai:.2f}s")
-            await log_attempt(client_id, client_ip, input_icao, resolved_icao, request.plane_size, duration, status, error_msg, model_used, tokens_used)
+            print(f"⏱️  PERFORMANCE: {input_icao} | Total: {duration:.2f}s | Wx: {t_weather:.2f}s")
+            
+            output_for_log = resolved_icao
+            if resolved_icao == ("K" + raw_input) and any(char.isdigit() for char in raw_input):
+                output_for_log = raw_input
 
-# --- PUBLIC STATUS ENDPOINT ---
+            await log_attempt(client_id, client_ip, raw_input, output_for_log, request.plane_size, duration, status, error_msg, model_used, tokens_used, weather_icao, expiration_dt)
+
+# --- STATUS ENDPOINT ---
 @router.get("/system-status")
 async def get_public_system_status():
-    """Public endpoint to fetch banner and non-sensitive status"""
     from app.core.settings import settings
     banner_enabled = await settings.get("banner_enabled")
     banner_msg = await settings.get("banner_message", "")

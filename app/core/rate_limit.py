@@ -5,7 +5,7 @@ from app.core.db import redis_client
 
 class RateLimiter:
     def __init__(self):
-        # RESTORED: 10.x exemption as requested
+        # Hardcoded Exemptions
         self.exempt_networks = [
             ipaddress.ip_network("127.0.0.0/8"),
             ipaddress.ip_network("::1/128"),
@@ -23,23 +23,23 @@ class RateLimiter:
             max_calls = 5
             period = 300
 
-        # Allow disabling limits by setting to 0
         if max_calls <= 0:
              return
 
-        # 1. Identify User
-        # We prefer X-Client-ID (Frontend UUID), fallback to IP
-        client_ip = request.headers.get("X-Forwarded-For", request.client.host).split(',')[0].strip()
-        client_id = request.headers.get("X-Client-ID")
-        
-        identifier = client_id if (client_id and client_id not in ["null", "undefined", "UNKNOWN"]) else client_ip
+        # 1. Identify User (Prioritize IP, handle Docker NAT)
+        forwarded = request.headers.get("X-Forwarded-For")
+        if forwarded:
+            client_ip = forwarded.split(',')[0].strip()
+        else:
+            client_ip = request.client.host
+            
+        identifier = client_ip
         
         # 2. Check Exemptions
         try:
             ip_obj = ipaddress.ip_address(client_ip)
             for network in self.exempt_networks:
                 if ip_obj in network: 
-                    # print(f"DEBUG: RateLimit EXEMPT IP={client_ip}") 
                     return 
         except ValueError: pass
 
@@ -53,17 +53,10 @@ class RateLimiter:
         if current_count == 1:
             await redis_client.expire(redis_key, period)
 
-        # DEBUG LOG (Check this in 'docker logs' to verify it sees Limit=1)
-        print(f"DEBUG: RateLimit Key={redis_key} Count={current_count}/{max_calls}")
-
         if current_count > max_calls:
             raise HTTPException(
                 status_code=429, 
-                detail=(
-                        "Rate limit exceeded. To keep this tool free, "
-                        "analysis is limited to 5 searches every 5 minutes. "
-                        "Buy Me A Fuel Top-Up in the Footer helps with server costs"
-                    )
+                detail="Rate limit exceeded."
             )
 
 limiter = RateLimiter()

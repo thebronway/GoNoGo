@@ -9,7 +9,6 @@ airports_lid = airportsdata.load('LID')
 print(f"DEBUG: Loaded {len(airports_icao)} ICAO and {len(airports_lid)} LID airports.")
 
 # --- DEFINED AIRSPACE ZONES ---
-# Sources: FAA Sectional Charts (Prohibited Areas P-*)
 RESTRICTED_ZONES = {
     "DC_SFRA": {
         "name": "Washington DC SFRA",
@@ -75,7 +74,6 @@ def calculate_distance(lat1, lon1, lat2, lon2):
     c = 2 * math.atan2(math.sqrt(a), math.sqrt(1 - a))
     return R * c * 0.539957  # Convert to NM
 
-# UPDATED FUNCTION: Now accepts target_code
 def check_airspace_zones(target_code, target_lat, target_lon):
     """
     Checks if coordinates fall inside or near known restricted zones.
@@ -89,21 +87,19 @@ def check_airspace_zones(target_code, target_lat, target_lon):
         # 1. DIRECT HIT
         if dist <= zone['radius']:
             if zone['type'] == "PROHIBITED":
-                # EXACT PHRASING REQUESTED (Corrected typo "Airportis" -> "is")
                 warnings.append(f"CRITICAL: {target_code} is located within the {zone['name']} ({dist:.1f}nm from center). Flight strictly restricted; special procedures required.")
             else:
                 warnings.append(f"WARNING: {target_code} is located within the {zone['name']}. Special procedures required.")
         
         # 2. PROXIMITY WARNING (5nm Buffer)
         elif dist <= (zone['radius'] + 5):
-             # EXACT PHRASING REQUESTED
              warnings.append(f"ADVISORY: {target_code} is just outside ({dist:.1f}nm from the center) of the {zone['name']}. Exercise caution near boundary.")
 
     return warnings
 
 async def get_nearest_reporting_stations(target_code, limit=10):
     """
-    Returns a LIST of nearest airport codes.
+    Returns a LIST of tuples: [(icao, distance_nm), ...].
     PRIORITIZES Large/Medium airports to ensure we find a valid weather station quickly.
     """
     target_code = target_code.upper().strip()
@@ -120,8 +116,8 @@ async def get_nearest_reporting_stations(target_code, limit=10):
     target_lon = float(target['lon'])
 
     # Separate lists for prioritization
-    primary_candidates = []   # Large/Medium (Likely to have METAR)
-    secondary_candidates = [] # Small (Unlikely to have METAR)
+    primary_candidates = []   # Likely to have METAR (Large/Medium or standard ICAO)
+    secondary_candidates = [] # Unlikely to have METAR (Small/Private/Alphanumeric)
     
     for code, data in airports_icao.items():
         if code == target_code: 
@@ -133,9 +129,15 @@ async def get_nearest_reporting_stations(target_code, limit=10):
             
             if dist < 50: 
                 # CLASSIFY THE AIRPORT
+                # 'type' is typically 'large_airport', 'medium_airport', 'small_airport'
                 apt_type = data.get('type', 'small_airport')
                 
-                if apt_type in ['large_airport', 'medium_airport']:
+                # HEURISTIC: Prioritize Medium/Large OR standard 4-letter codes (e.g. KDOV)
+                # Deprioritize alphanumeric codes (e.g. 6MD7) which rarely report weather.
+                is_major = apt_type in ['large_airport', 'medium_airport']
+                is_standard_icao = (len(code) == 4 and code.isalpha())
+                
+                if is_major or is_standard_icao:
                     primary_candidates.append((code, dist))
                 else:
                     secondary_candidates.append((code, dist))
@@ -147,6 +149,6 @@ async def get_nearest_reporting_stations(target_code, limit=10):
     secondary_candidates.sort(key=lambda x: x[1])
     
     # Merge: Priority first, then secondary
-    final_list = [x[0] for x in primary_candidates] + [x[0] for x in secondary_candidates]
+    final_list = primary_candidates + secondary_candidates
     
     return final_list[:limit]

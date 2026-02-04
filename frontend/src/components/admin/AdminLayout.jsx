@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { Link, useLocation } from 'react-router-dom';
-import { LayoutDashboard, Network, Settings, Lock } from 'lucide-react';
+import { LayoutDashboard, Network, Settings, Lock, ListVideo } from 'lucide-react';
 
 const AdminLayout = ({ children }) => {
   const location = useLocation();
@@ -82,6 +82,7 @@ const AdminLayout = ({ children }) => {
             </div>
             <nav className="space-y-1">
             <NavItem to="/admin/dashboard" icon={LayoutDashboard} label="Overview" />
+            <NavItem to="/admin/logs" icon={ListVideo} label="Live Logs" />
             <NavItem to="/admin/ip" icon={Network} label="IP Manager" />
             <NavItem to="/admin/settings" icon={Settings} label="Settings" />
             </nav>

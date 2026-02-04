@@ -3,6 +3,7 @@ import { BrowserRouter as Router, Routes, Route, Link, useLocation } from 'react
 import { Megaphone, Fuel } from 'lucide-react'; 
 import Dashboard from './components/Dashboard';
 import AdminDashboard from './components/admin/AdminDashboard';
+import LiveLogs from './components/admin/LiveLogs';
 import IpManager from './components/admin/IpManager';
 import Settings from './components/admin/Settings';
 import About from './components/About';
@@ -107,6 +108,7 @@ const AppContent = () => {
              {/* Admin Routes */}
              <Route path="/admin" element={<AdminDashboard />} />
              <Route path="/admin/dashboard" element={<AdminDashboard />} />
+             <Route path="/admin/logs" element={<LiveLogs />} />
              <Route path="/admin/ip" element={<IpManager />} />
              <Route path="/admin/settings" element={<Settings />} />
 
@@ -116,7 +118,7 @@ const AppContent = () => {
 
         {/* FOOTER */}
         <footer className="w-full py-8 text-center border-t border-neutral-800 bg-black text-xs text-neutral-600 space-y-4 relative z-10">
-          <p>&copy; {new Date().getFullYear()} GoNoGo AI v0.5 • Built for Pilots • All rights reserved</p>
+          <p>&copy; {new Date().getFullYear()} GoNoGo AI v0.55 • Built for Pilots • All rights reserved</p>
           <div className="flex flex-col items-center gap-2">
             <span className="text-neutral-500 italic">Help with server and API costs:</span>
             <a 

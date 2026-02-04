@@ -2,6 +2,7 @@ import json
 import datetime
 import os
 import secrets
+import asyncio
 from fastapi import APIRouter, HTTPException, BackgroundTasks, Depends, Security
 from fastapi.security import APIKeyHeader
 from pydantic import BaseModel
@@ -14,8 +15,25 @@ API_KEY_NAME = "X-Admin-Key"
 api_key_header = APIKeyHeader(name=API_KEY_NAME, auto_error=False)
 
 async def get_admin_key(api_key_header: str = Security(api_key_header)):
-    # TEMPORARY BYPASS: Always allow access
-    return
+    """
+    Validates the X-Admin-Key header against the ADMIN_SECRET_KEY environment variable.
+    """
+    if not api_key_header:
+        raise HTTPException(status_code=403, detail="Missing Admin Key")
+    
+    # Load the secret from environment variables
+    server_key = os.getenv("ADMIN_SECRET_KEY")
+    
+    if not server_key:
+        print("CRITICAL: ADMIN_SECRET_KEY not set. Admin access disabled.")
+        raise HTTPException(status_code=403, detail="Admin access disabled (Server Config).")
+
+    # Secure constant-time comparison
+    if not secrets.compare_digest(api_key_header, server_key):
+        await asyncio.sleep(0.1 + (secrets.randbelow(5) / 10.0))
+        raise HTTPException(status_code=403, detail="Invalid Admin Key")
+    
+    return api_key_header
 
 # Protect all routes in this file
 router = APIRouter(dependencies=[Depends(get_admin_key)])
@@ -23,9 +41,7 @@ router = APIRouter(dependencies=[Depends(get_admin_key)])
 # --- 1. STATISTICS (THE CARDS) ---
 @router.get("/stats")
 async def get_stats():
-    # 1. CACHE CHECK (5 Minute TTL)
     cache_key = "admin_stats_cache"
-    # We await the redis call, but handle if redis is down/empty
     try:
         cached_data = await redis_client.get(cache_key)
         if cached_data:
@@ -34,9 +50,6 @@ async def get_stats():
         pass
 
     stats = {}
-    
-    # FIX: Revert to Naive UTC to match Postgres 'TIMESTAMP' column
-    # This ensures we don't get "can't compare offset-naive and offset-aware" errors
     now_naive = datetime.datetime.now(datetime.timezone.utc).replace(tzinfo=None)
     
     intervals = {
@@ -52,7 +65,6 @@ async def get_stats():
         query_base = "FROM logs WHERE timestamp > :cutoff"
         params = {"cutoff": cutoff_time}
         
-        # 1. Aggregates
         query_agg = f"""
             SELECT COUNT(*) as total, AVG(duration_seconds) as avg_lat,
             SUM(CASE WHEN status = 'SUCCESS' THEN 1 ELSE 0 END) as success,
@@ -63,15 +75,12 @@ async def get_stats():
         """
         row = await database.fetch_one(query_agg, values=params)
         
-        # 2. Top Airport
         query_top_apt = f"SELECT input_icao, COUNT(*) as c {query_base} GROUP BY input_icao ORDER BY c DESC LIMIT 1"
         pop_ap = await database.fetch_one(query_top_apt, values=params)
         
-        # 3. Top User
         query_top_user = f"SELECT client_id, COUNT(*) as c {query_base} GROUP BY client_id ORDER BY c DESC LIMIT 1"
         top_user = await database.fetch_one(query_top_user, values=params)
 
-        # 4. Top Blocked
         query_blocked = f"SELECT client_id, COUNT(*) as c {query_base} AND status='RATE_LIMIT' GROUP BY client_id ORDER BY c DESC LIMIT 1"
         blocked = await database.fetch_one(query_blocked, values=params)
 
@@ -89,9 +98,8 @@ async def get_stats():
             "top_blocked": f"{blocked['client_id'][:8]}.. ({blocked['c']})" if blocked else "-"
         }
     
-    # 2. SAVE TO CACHE
     try:
-        await redis_client.setex(cache_key, 300, json.dumps(stats))
+        await redis_client.setex(cache_key, 60, json.dumps(stats))
     except:
         pass
     
@@ -103,12 +111,17 @@ async def get_logs(limit: int = 100):
     query = "SELECT * FROM logs ORDER BY id DESC LIMIT :limit"
     rows = await database.fetch_all(query=query, values={"limit": limit})
     
-    # FIX: Force timestamps to be UTC Aware so Frontend converts them correctly
     results = []
     for row in rows:
         r = dict(row)
+        # Fix Timestamp (Log Time)
         if r['timestamp'] and r['timestamp'].tzinfo is None:
             r['timestamp'] = r['timestamp'].replace(tzinfo=datetime.timezone.utc)
+            
+        # Fix Expiration Timestamp (Cache Time)
+        if r.get('expiration_timestamp') and r['expiration_timestamp'].tzinfo is None:
+            r['expiration_timestamp'] = r['expiration_timestamp'].replace(tzinfo=datetime.timezone.utc)
+            
         results.append(r)
         
     return results
@@ -116,7 +129,6 @@ async def get_logs(limit: int = 100):
 # --- 3. CLIENT MANAGEMENT & UNBLOCKING ---
 @router.get("/clients")
 async def get_client_stats():
-    # FIX: Await the settings calls
     limit_count_val = await settings.get("rate_limit_calls", 5)
     limit_count = int(limit_count_val)
     
