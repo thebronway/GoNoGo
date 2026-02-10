@@ -8,7 +8,7 @@
 
 ### Try it yourself: **[Live Site](https://wxdecoder.conway.im/)**
 
-**Current Version:** `v0.62`  
+**Current Version:** `v0.63`  
 **GitHub:** [thebronway/WxDecoder](https://github.com/thebronway/WxDecoder)  
 
 

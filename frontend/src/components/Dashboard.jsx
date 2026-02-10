@@ -266,12 +266,30 @@ const Dashboard = ({ onSearchStateChange }) => {
             <div className="text-gray-200 leading-relaxed text-base">
                 {(analysis.briefing_overview || analysis.executive_summary || "").split('\n').map((line, i) => {
                     // 1. Check if the line is a Header (e.g. "**WEATHER**")
-                    // We look for a line that starts and ends with double asterisks
                     const headerMatch = line.trim().match(/^\*\*(.*?)\*\*$/);
                     if (headerMatch) {
+                        let headerText = headerMatch[1];
+                        
+                        // Logic: Handle Different Weather Source Display
+                        const target = icao ? icao.toUpperCase() : "";
+                        const source = raw.weather_source ? raw.weather_source.toUpperCase() : "";
+                        const isDifferent = source && target && source !== target && source !== "K" + target;
+
+                        if (headerText === "WEATHER") {
+                             headerText = "CURRENT WEATHER";
+                             if (isDifferent) headerText += ` (${source})`;
+                        } else if (headerText === "CROSSWIND") {
+                             if (isDifferent) headerText += ` (${source})`;
+                        } else if (headerText === "AIRSPACE") {
+                             if (isDifferent) headerText += ` (${target})`;
+                        } else if (headerText === "NOTAMS") {
+                             headerText = "NOTABLE NOTAMS";
+                             if (isDifferent) headerText += ` (${target})`;
+                        }
+
                         return (
                             <h4 key={i} className="font-bold text-blue-400 mt-4 mb-2 uppercase tracking-widest text-xs border-b border-neutral-700 pb-1">
-                                {headerMatch[1]}
+                                {headerText}
                             </h4>
                         );
                     }
@@ -297,18 +315,26 @@ const Dashboard = ({ onSearchStateChange }) => {
           {/* TIMELINE CARDS (Human Readable) */}
           {timeline.t_06 && timeline.t_06 !== "NO_TAF" ? (
              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                {/* 6 Hour Card */}
                 <div className="bg-neutral-800 border border-neutral-700 rounded-xl p-5">
-                    <span className="text-blue-400 font-bold text-xs block mb-2 uppercase tracking-wide">
-                        {timeline.t_06.time_label || "Next 6 Hours"}
-                    </span>
+                    <div className="border-b border-neutral-700 pb-2 mb-3">
+                        <span className="text-blue-400 font-bold text-xs block uppercase tracking-wide">
+                            Weather {timeline.t_06.time_label || "Next 6 Hours"} 
+                            {(raw.weather_source && icao && raw.weather_source !== icao.toUpperCase() && raw.weather_source !== "K" + icao.toUpperCase()) ? ` (${raw.weather_source})` : ""}
+                        </span>
+                    </div>
                     <p className="text-sm text-gray-300 leading-relaxed">
                         {timeline.t_06.summary || timeline.t_06}
                     </p>
                 </div>
+                {/* 12 Hour Card */}
                 <div className="bg-neutral-800 border border-neutral-700 rounded-xl p-5">
-                    <span className="text-blue-400 font-bold text-xs block mb-2 uppercase tracking-wide">
-                        {timeline.t_12.time_label || "Next 12 Hours"}
-                    </span>
+                    <div className="border-b border-neutral-700 pb-2 mb-3">
+                        <span className="text-blue-400 font-bold text-xs block uppercase tracking-wide">
+                            Weather {timeline.t_12.time_label || "Next 12 Hours"}
+                            {(raw.weather_source && icao && raw.weather_source !== icao.toUpperCase() && raw.weather_source !== "K" + icao.toUpperCase()) ? ` (${raw.weather_source})` : ""}
+                        </span>
+                    </div>
                     <p className="text-sm text-gray-300 leading-relaxed">
                         {timeline.t_12.summary || timeline.t_12}
                     </p>
