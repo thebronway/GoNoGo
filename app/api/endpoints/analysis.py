@@ -163,11 +163,10 @@ async def analyze_flight(request: AnalysisRequest, raw_request: Request, backgro
         t_weather = time.time() - t0_data
         
         if not weather_data:
-            return {"error": "No airport or weather data found."}
+            weather_data = {"metar": None, "taf": None}
 
         t0 = time.time()
         
-        # Pass TZ to AI for human-readable time conversion
         analysis = await analyze_risk(
             icao_code=airport_name, 
             weather_data=weather_data,
@@ -176,7 +175,8 @@ async def analyze_flight(request: AnalysisRequest, raw_request: Request, backgro
             reporting_station=weather_icao,
             reporting_station_name=weather_name,
             airport_tz=airport_tz, 
-            external_airspace_warnings=airspace_warnings
+            external_airspace_warnings=airspace_warnings,
+            dist=weather_dist
         )
         t_ai = time.time() - t0
 

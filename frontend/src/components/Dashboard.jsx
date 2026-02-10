@@ -135,13 +135,13 @@ const Dashboard = ({ onSearchStateChange }) => {
     <div className="max-w-4xl mx-auto space-y-8 pb-12 pt-4">
       <SEO 
         title="WxDecoder - Aviation Weather Analysis"
-        description="Instant plain-English weather analysis for pilots. Decode METARs, TAFs, and NOTAMs with AI. Free flight planning tool."
+        description="Instant plain-English weather analysis for pilots. Decode METARs, TAFs, Airspace, and NOTAMs with AI. Free flight planning tool."
         path="/"
       />
       
       <div className="text-center space-y-4 mb-8">
         <h2 className="text-xl md:text-2xl font-light text-blue-200 tracking-tight">
-          A Situational Awareness Tool for Pilots to Decode Weather & NOTAMs
+          A Situational Awareness Tool for Pilots to Decode Weather, Airspace, & NOTAMs
         </h2>
         <div className="h-px bg-gradient-to-r from-transparent via-neutral-800 to-transparent w-full my-6"></div>
         <p className="text-neutral-400 text-sm max-w-2xl mx-auto leading-relaxed">
@@ -257,12 +257,41 @@ const Dashboard = ({ onSearchStateChange }) => {
             )}
           </div>
 
-          <div className="bg-neutral-800 border border-neutral-700 rounded-xl p-6 shadow-xl relative">
+          <div className="bg-neutral-800 border border-neutral-700 rounded-xl p-6 relative">
             <div className="flex justify-between items-start mb-3">
                  <h3 className="text-xs font-bold text-neutral-500 uppercase tracking-widest">Briefing Overview</h3>
                  <ReportButton />
             </div>
-            <p className="text-gray-200 leading-relaxed text-base">{analysis.briefing_overview || analysis.executive_summary}</p>
+            
+            <div className="text-gray-200 leading-relaxed text-base">
+                {(analysis.briefing_overview || analysis.executive_summary || "").split('\n').map((line, i) => {
+                    // 1. Check if the line is a Header (e.g. "**WEATHER**")
+                    // We look for a line that starts and ends with double asterisks
+                    const headerMatch = line.trim().match(/^\*\*(.*?)\*\*$/);
+                    if (headerMatch) {
+                        return (
+                            <h4 key={i} className="font-bold text-blue-400 mt-4 mb-2 uppercase tracking-widest text-xs border-b border-neutral-700 pb-1">
+                                {headerMatch[1]}
+                            </h4>
+                        );
+                    }
+                    
+                    // 2. Handle Inline Bolding (e.g. "**Departure Procedures**:")
+                    // We split the line by the bold markers to isolate the bold parts
+                    const parts = line.split(/(\*\*.*?\*\*)/g);
+                    return (
+                        <p key={i} className="mb-2 min-h-[1rem]">
+                            {parts.map((part, j) => {
+                                if (part.startsWith('**') && part.endsWith('**')) {
+                                    // Remove the asterisks and render strong tag
+                                    return <strong key={j} className="text-white font-bold">{part.slice(2, -2)}</strong>;
+                                }
+                                return part;
+                            })}
+                        </p>
+                    );
+                })}
+            </div>
           </div>
 
           {/* TIMELINE CARDS (Human Readable) */}
