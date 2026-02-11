@@ -9,7 +9,7 @@ from pydantic import BaseModel
 from app.core.weather import get_metar_taf
 from app.core.notams import get_notams
 from app.core.ai import analyze_risk
-from app.core.geography import get_nearest_reporting_stations, check_airspace_zones, airports_icao, airports_lid
+from app.core.geography import get_nearest_reporting_stations, check_airspace_zones, airports_icao, airports_lid, get_coords_from_awc
 from app.core.rate_limit import RateLimiter
 from app.core.logger import log_attempt
 from app.core.cache import get_cached_report, save_cached_report
@@ -75,9 +75,18 @@ async def analyze_flight(request: AnalysisRequest, raw_request: Request, backgro
     elif len(raw_input) == 3 and ("K" + raw_input) in airports_icao:
         input_icao = "K" + raw_input
     else:
+        # Final Sanity Check: If not in local DB, check the FAA remote records
+        # This prevents "Fake" airports from hitting the AI and consuming tokens.
+        remote_data = await get_coords_from_awc(raw_input)
+        
+        if not remote_data:
+            raise HTTPException(
+                status_code=404, 
+                detail=f"Airport '{raw_input}' not found. Please verify the ICAO or LID code."
+            )
         input_icao = raw_input
     
-    resolved_icao = input_icao 
+    resolved_icao = input_icao
     status = "FAIL" 
     error_msg = None
     model_used = None

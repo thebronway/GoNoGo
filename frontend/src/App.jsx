@@ -71,18 +71,18 @@ const AppContent = () => {
             <div className="max-w-5xl mx-auto px-4 md:px-6 flex flex-row justify-between items-center h-16 md:h-24">
               
               {/* LOGO AREA */}
-              <Link 
-                  to="/" 
+              <a 
+                  href="/" 
                   className={`group relative flex items-center transition-all duration-500 ${
                       showLogo ? 'opacity-100 translate-y-0' : 'opacity-0 -translate-y-2 pointer-events-none'
                   }`}
               >
-                 <img src="/logo.webp" alt="WxDecoder Logo" className="h-14 md:h-20 w-auto object-contain" />
-              </Link>
+                <img src="/logo.webp" alt="WxDecoder Logo" className="h-14 md:h-20 w-auto object-contain" />
+              </a>
 
               {/* NAVIGATION MENU */}
               <nav className="flex gap-6 md:gap-8 font-bold uppercase tracking-wide md:tracking-widest text-neutral-400 text-xs whitespace-nowrap">
-                <Link to="/" className="hover:text-white hover:text-blue-400 transition-colors">Home</Link>
+                <a href="/" className="hover:text-white hover:text-blue-400 transition-colors">Home</a>
                 <Link to="/kiosk" className="hover:text-white hover:text-blue-400 transition-colors">Kiosk</Link>
                 <Link to="/about" className="hover:text-white hover:text-blue-400 transition-colors">About</Link>
               </nav>
@@ -137,7 +137,7 @@ const AppContent = () => {
               <Link to="/report" className="hover:text-white transition-colors">Report an Issue</Link>
               <Link to="/disclaimer" className="hover:text-white transition-colors">Terms Of Use & Disclaimer</Link>
             </div>
-            <p>&copy; {new Date().getFullYear()} WxDecoder v0.65 • Built for Pilots • All rights reserved</p>
+            <p>&copy; {new Date().getFullYear()} WxDecoder v0.66 • Built for Pilots • All rights reserved</p>
             <div className="flex flex-col items-center gap-2">
               <span className="text-neutral-500 italic">Help with server and API costs:</span>
               <a 

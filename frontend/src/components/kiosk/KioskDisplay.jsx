@@ -245,7 +245,7 @@ const KioskDisplay = () => {
                         <Bubble 
                             label="WIND" 
                             value={analysis.bubbles?.wind || "--"} 
-                            subLabel={`X-WIND RWY ${analysis.bubbles?.rwy || "??"}`}
+                            subLabel={`CROSSWIND RWY ${analysis.bubbles?.rwy || "??"}`}
                             subValue={analysis.bubbles?.x_wind || "--"}
                             risk={analysis.crosswind_status} 
                         />
@@ -271,39 +271,38 @@ const KioskDisplay = () => {
                             Briefing Overview
                          </h2>
                          
-                         <div className="text-xl leading-relaxed text-gray-200 space-y-4 overflow-y-auto pb-12">
-                            {(analysis.briefing_overview || "").split('\n').map((line, i) => {
-                                const trimmed = line.trim();
-                                if (trimmed.startsWith('**') && trimmed.endsWith('**')) {
-                                    let text = trimmed.replace(/\*\*/g, '').toUpperCase();
-                                    
-                                    if (text === "WEATHER") {
-                                         text = "CURRENT WEATHER";
-                                         if (isDifferent) text += ` (${source})`;
-                                    } else if (text === "CROSSWIND") {
-                                         if (isDifferent) text += ` (${source})`;
-                                    } else if (text === "AIRSPACE") {
-                                         if (isDifferent) text += ` (${target})`;
-                                    } else if (text === "NOTAMS") {
-                                         text = "NOTABLE NOTAMS";
-                                         if (isDifferent) text += ` (${target})`;
-                                    }
+                         <div className="text-xl leading-relaxed text-gray-200 space-y-6 overflow-y-auto pb-12">
+                            {/* WEATHER */}
+                            <div>
+                                <h3 className="text-blue-400 font-bold uppercase tracking-widest mb-2 border-b border-blue-900/30 w-fit">
+                                    CURRENT WEATHER {isDifferent ? `(${source})` : ""}
+                                </h3>
+                                <p>{analysis.summary_weather || "No data."}</p>
+                            </div>
 
-                                    return <h3 key={i} className="text-blue-400 font-bold uppercase tracking-widest mt-4 border-b border-blue-900/30 w-fit">{text}</h3>;
-                                }
-                                
-                                const parts = line.split(/(\*\*.*?\*\*)/g);
-                                return (
-                                    <p key={i}>
-                                        {parts.map((part, j) => {
-                                            if (part.startsWith('**') && part.endsWith('**')) {
-                                                return <strong key={j} className="text-white font-bold">{part.slice(2, -2)}</strong>;
-                                            }
-                                            return part;
-                                        })}
-                                    </p>
-                                );
-                            })}
+                            {/* CROSSWIND */}
+                            <div>
+                                <h3 className="text-blue-400 font-bold uppercase tracking-widest mb-2 border-b border-blue-900/30 w-fit">
+                                    CROSSWIND {isDifferent ? `(${source})` : ""}
+                                </h3>
+                                <p>{analysis.summary_crosswind || "No data."}</p>
+                            </div>
+
+                            {/* AIRSPACE */}
+                            <div>
+                                <h3 className="text-blue-400 font-bold uppercase tracking-widest mb-2 border-b border-blue-900/30 w-fit">
+                                    AIRSPACE {isDifferent ? `(${target})` : ""}
+                                </h3>
+                                <p>{analysis.summary_airspace || "No data."}</p>
+                            </div>
+
+                            {/* NOTAMS */}
+                            <div>
+                                <h3 className="text-blue-400 font-bold uppercase tracking-widest mb-2 border-b border-blue-900/30 w-fit">
+                                    NOTABLE NOTAMS {isDifferent ? `(${target})` : ""}
+                                </h3>
+                                <p>{analysis.summary_notams || "No data."}</p>
+                            </div>
                          </div>
                          
                          {/* Warnings Footer */}

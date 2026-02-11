@@ -118,6 +118,9 @@ const Dashboard = ({ onSearchStateChange }) => {
   const timeline = analysis.timeline || {};
   const bubbles = analysis.bubbles || {};
   const raw = data?.raw_data || {};
+  const target = icao ? icao.toUpperCase() : "";
+  const source = raw.weather_source ? raw.weather_source.toUpperCase() : "";
+  const isDifferent = source && target && source !== target && source !== "K" + target;
   
   const metarTimes = getMetarTime(raw.metar, data?.airport_tz || 'UTC');
 
@@ -270,51 +273,40 @@ const Dashboard = ({ onSearchStateChange }) => {
                  <ReportButton />
             </div>
             
-            <div className="text-gray-200 leading-relaxed text-base">
-                {(analysis.briefing_overview || analysis.executive_summary || "").split('\n').map((line, i) => {
-                    const headerMatch = line.trim().match(/^\*\*\s*(.*?)\s*\*\*[:\s]*$/);
-                    
-                    if (headerMatch) {
-                        let headerText = headerMatch[1].toUpperCase().trim();
-                        
-                        const target = icao ? icao.toUpperCase() : "";
-                        const source = raw.weather_source ? raw.weather_source.toUpperCase() : "";
-                        const isDifferent = source && target && source !== target && source !== "K" + target;
+            <div className="text-gray-200 leading-relaxed text-base space-y-5">
+                
+                {/* WEATHER */}
+                <div>
+                    <h4 className="font-bold text-blue-400 mb-2 uppercase tracking-widest text-xs border-b border-neutral-700 pb-1">
+                        CURRENT WEATHER {isDifferent ? `(${source})` : ""}
+                    </h4>
+                    <p>{analysis.summary_weather || "No weather summary available."}</p>
+                </div>
 
-                        if (headerText === "WEATHER") {
-                             headerText = "CURRENT WEATHER";
-                             if (isDifferent) headerText += ` (${source})`;
-                        } else if (headerText === "WIND") {
-                             if (isDifferent) headerText += ` (${source})`;
-                        } else if (headerText === "AIRSPACE") {
-                             if (isDifferent) headerText += ` (${target})`;
-                        } else if (headerText === "NOTAMS") {
-                             headerText = "NOTABLE NOTAMS";
-                             if (isDifferent) headerText += ` (${target})`;
-                        }
+                {/* CROSSWIND */}
+                <div>
+                    <h4 className="font-bold text-blue-400 mb-2 uppercase tracking-widest text-xs border-b border-neutral-700 pb-1">
+                         CROSSWIND {isDifferent ? `(${source})` : ""}
+                    </h4>
+                    <p>{analysis.summary_crosswind || "No crosswind data."}</p>
+                </div>
 
-                        return (
-                            <h4 key={i} className="font-bold text-blue-400 mt-4 mb-2 uppercase tracking-widest text-xs border-b border-neutral-700 pb-1">
-                                {headerText}
-                            </h4>
-                        );
-                    }
-                    
-                    // 2. Handle Inline Bolding (e.g. "**Departure Procedures**:")
-                    // We split the line by the bold markers to isolate the bold parts
-                    const parts = line.split(/(\*\*.*?\*\*)/g);
-                    return (
-                        <p key={i} className="mb-2 min-h-[1rem]">
-                            {parts.map((part, j) => {
-                                if (part.startsWith('**') && part.endsWith('**')) {
-                                    // Remove the asterisks and render strong tag
-                                    return <strong key={j} className="text-white font-bold">{part.slice(2, -2)}</strong>;
-                                }
-                                return part;
-                            })}
-                        </p>
-                    );
-                })}
+                {/* AIRSPACE */}
+                <div>
+                    <h4 className="font-bold text-blue-400 mb-2 uppercase tracking-widest text-xs border-b border-neutral-700 pb-1">
+                         AIRSPACE {isDifferent ? `(${target})` : ""}
+                    </h4>
+                    <p>{analysis.summary_airspace || "No airspace warnings."}</p>
+                </div>
+
+                {/* NOTAMS */}
+                <div>
+                    <h4 className="font-bold text-blue-400 mb-2 uppercase tracking-widest text-xs border-b border-neutral-700 pb-1">
+                         NOTABLE NOTAMS {isDifferent ? `(${target})` : ""}
+                    </h4>
+                    <p>{analysis.summary_notams || "No critical NOTAMs found."}</p>
+                </div>
+
             </div>
           </div>
 
@@ -357,7 +349,7 @@ const Dashboard = ({ onSearchStateChange }) => {
             <Bubble 
                 label="WIND" 
                 value={bubbles?.wind || "--"} 
-                subLabel={`X-WIND RWY ${bubbles?.rwy || "??"}`}
+                subLabel={`CROSSWIND RWY ${bubbles?.rwy || "??"}`}
                 subValue={bubbles?.x_wind || "--"}
                 risk={analysis.crosswind_status || analysis.wind_risk} 
             />
@@ -440,7 +432,9 @@ const Dashboard = ({ onSearchStateChange }) => {
             metar: raw.metar,
             taf: raw.taf,
             raw_notams: raw.notams,
-            summary: analysis.briefing_overview || analysis.executive_summary,
+            summary: analysis.summary_weather ? 
+                [analysis.summary_weather, analysis.summary_crosswind, analysis.summary_airspace, analysis.summary_notams].join('\n\n') 
+                : analysis.briefing_overview,
             airspace_analysis: analysis.airspace_warnings,
             notam_analysis: analysis.critical_notams,
             timeline: analysis.timeline

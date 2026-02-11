@@ -37,8 +37,12 @@ const Bubble = ({ label, value, subLabel, subValue, highlight, risk }) => {
           <span className="text-[9px] md:text-[10px] font-bold text-neutral-400 uppercase tracking-widest mb-0.5">
             {label}
           </span>
-          <span className={`text-lg md:text-xl font-bold ${textColor} text-center leading-none`}>
-            {value}
+          <span className={`font-bold ${textColor} text-center leading-tight transition-all whitespace-pre-line ${
+              value && value.length > 40 ? 'text-[10px] md:text-xs' : 
+              value && value.length > 30 ? 'text-sm md:text-base' : 
+              'text-lg md:text-xl'
+          }`}>
+              {value}
           </span>
       </div>
 
