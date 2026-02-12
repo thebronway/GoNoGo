@@ -49,17 +49,17 @@ const BriefingScroller = ({ analysis, isDifferent, source, target }) => {
         },
         {
             id: 'crosswind',
-            title: `CROSSWIND FOR ${target}`,
+            title: `CROSSWIND`,
             content: analysis.summary_crosswind
         },
         {
             id: 'airspace',
-            title: `AIRSPACE ${isDifferent ? `(${target})` : ""}`,
+            title: `AIRSPACE`,
             content: analysis.summary_airspace
         },
         {
             id: 'notams',
-            title: `NOTABLE NOTAMS ${isDifferent ? `(${target})` : ""}`,
+            title: `NOTABLE NOTAMS`,
             content: analysis.summary_notams
         }
     ];

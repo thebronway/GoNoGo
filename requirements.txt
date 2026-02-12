@@ -4,6 +4,7 @@ requests
 openai
 python-dotenv
 airportsdata
+aeronavx
 httpx
 asyncpg>=0.29.0
 redis>=5.0.0

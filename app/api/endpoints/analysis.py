@@ -6,7 +6,7 @@ import logging
 from fastapi import APIRouter, Request, HTTPException, BackgroundTasks
 from pydantic import BaseModel
 
-from app.core.weather import get_metar_taf
+from app.core.weather import get_metar_taf, get_bulk_weather_data
 from app.core.notams import get_notams
 from app.core.ai import analyze_risk
 from app.core.geography import get_nearest_reporting_stations, check_airspace_zones, airports_icao, airports_lid, get_coords_from_awc
@@ -175,19 +175,54 @@ async def analyze_flight(request: AnalysisRequest, raw_request: Request, backgro
         if not weather_data:
             t0_alt = time.time()
             candidates = await get_nearest_reporting_stations(input_icao)
+            
+            # --- BULK FETCH OPTIMIZATION ---
+            # Instead of checking one-by-one (slow), fetch all candidates at once.
+            candidate_codes = [c[0] for c in candidates]
+            bulk_data = await get_bulk_weather_data(candidate_codes)
+            
+            # Strategy: Iterate to find a station with a TAF. 
+            # If none found, fallback to the closest station with a METAR.
+            fallback_data = None
+            fallback_station = None
+            fallback_dist = 0
+            fallback_name = None
+
             for station, dist in candidates:
-                data = await get_metar_taf(station)
-                if data:
-                    weather_icao = station
-                    weather_dist = dist
-                    weather_data = data
+                # Use local bulk data instead of making a network call
+                data = bulk_data.get(station)
+                
+                if data and data.get('metar'):
+                    # Check for Valid TAF (Not empty, not the error string)
+                    raw_taf = data.get('taf', "")
+                    has_taf = raw_taf and "No TAF available" not in raw_taf
                     
+                    # Resolve Name
                     st_data = airports_icao.get(station)
-                    if st_data:
-                        weather_name = st_data.get('name', station)
-                    else:
-                        weather_name = station
-                    break
+                    st_name = st_data.get('name', station) if st_data else station
+                    
+                    if has_taf:
+                        # Winner! Found a prioritized station with a TAF.
+                        weather_icao = station
+                        weather_dist = dist
+                        weather_data = data
+                        weather_name = st_name
+                        break
+                    
+                    # If this is the first station with at least a METAR, save it as fallback
+                    if not fallback_data:
+                        fallback_data = data
+                        fallback_station = station
+                        fallback_dist = dist
+                        fallback_name = st_name
+
+            # If loop finishes without a TAF-station, use the fallback (closest with METAR)
+            if not weather_data and fallback_data:
+                weather_icao = fallback_station
+                weather_dist = fallback_dist
+                weather_data = fallback_data
+                weather_name = fallback_name
+            
             t_alt = time.time() - t0_alt
         
         if not weather_data:

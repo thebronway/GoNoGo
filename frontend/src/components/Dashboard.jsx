@@ -149,7 +149,7 @@ const Dashboard = ({ onSearchStateChange }) => {
         <div className="h-px bg-gradient-to-r from-transparent via-neutral-800 to-transparent w-full my-6"></div>
         <p className="text-neutral-400 text-sm max-w-2xl mx-auto leading-relaxed">
           Enter an Airport ICAO code (e.g. <strong className="text-white">KBOS</strong>) or LID code (e.g. <strong className="text-white">2W5</strong>) and select a crosswind tolerance below.
-          <br />Searches may take up to 30 seconds.
+          <br />Searches for airports without METARs may take up to 30 seconds.
         </p>
       </div>
 
@@ -286,7 +286,7 @@ const Dashboard = ({ onSearchStateChange }) => {
                 {/* CROSSWIND */}
                 <div>
                     <h4 className="font-bold text-blue-400 mb-2 uppercase tracking-widest text-xs border-b border-neutral-700 pb-1">
-                         CROSSWIND {isDifferent ? `(${source})` : ""}
+                         CROSSWIND
                     </h4>
                     <p>{analysis.summary_crosswind || "No crosswind data."}</p>
                 </div>
@@ -294,7 +294,7 @@ const Dashboard = ({ onSearchStateChange }) => {
                 {/* AIRSPACE */}
                 <div>
                     <h4 className="font-bold text-blue-400 mb-2 uppercase tracking-widest text-xs border-b border-neutral-700 pb-1">
-                         AIRSPACE {isDifferent ? `(${target})` : ""}
+                         AIRSPACE
                     </h4>
                     <p>{analysis.summary_airspace || "No airspace warnings."}</p>
                 </div>
@@ -302,7 +302,7 @@ const Dashboard = ({ onSearchStateChange }) => {
                 {/* NOTAMS */}
                 <div>
                     <h4 className="font-bold text-blue-400 mb-2 uppercase tracking-widest text-xs border-b border-neutral-700 pb-1">
-                         NOTABLE NOTAMS {isDifferent ? `(${target})` : ""}
+                         NOTABLE NOTAMS
                     </h4>
                     <p>{analysis.summary_notams || "No critical NOTAMs found."}</p>
                 </div>
@@ -311,37 +311,43 @@ const Dashboard = ({ onSearchStateChange }) => {
           </div>
 
           {/* TIMELINE CARDS (Human Readable) */}
-          {timeline.t_06 && timeline.t_06 !== "NO_TAF" ? (
+          {(!raw.taf || raw.taf.includes("No TAF available")) ? (
+             /* NO TAF CARD */
+             <div className="bg-neutral-800 border border-neutral-700 rounded-xl p-5">
+                <div className="border-b border-neutral-700 pb-2 mb-3">
+                    <span className="text-blue-400 font-bold text-xs block uppercase tracking-wide">
+                        NO TAF AVAILABLE
+                    </span>
+                </div>
+                <p className="text-sm text-gray-300 leading-relaxed">--</p>
+             </div>
+          ) : (
              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 {/* 6 Hour Card */}
                 <div className="bg-neutral-800 border border-neutral-700 rounded-xl p-5">
                     <div className="border-b border-neutral-700 pb-2 mb-3">
                         <span className="text-blue-400 font-bold text-xs block uppercase tracking-wide">
-                            Weather {timeline.t_06.time_label || "Next 6 Hours"} 
+                            Weather {timeline.t_06?.time_label || "Next 6 Hours"} 
                             {(raw.weather_source && icao && raw.weather_source !== icao.toUpperCase() && raw.weather_source !== "K" + icao.toUpperCase()) ? ` (${raw.weather_source})` : ""}
                         </span>
                     </div>
                     <p className="text-sm text-gray-300 leading-relaxed">
-                        {timeline.t_06.summary || timeline.t_06}
+                        {timeline.t_06?.summary || timeline.t_06 || "Analysis unavailable"}
                     </p>
                 </div>
                 {/* 12 Hour Card */}
                 <div className="bg-neutral-800 border border-neutral-700 rounded-xl p-5">
                     <div className="border-b border-neutral-700 pb-2 mb-3">
                         <span className="text-blue-400 font-bold text-xs block uppercase tracking-wide">
-                            Weather {timeline.t_12.time_label || "Next 12 Hours"}
+                            Weather {timeline.t_12?.time_label || "Next 12 Hours"}
                             {(raw.weather_source && icao && raw.weather_source !== icao.toUpperCase() && raw.weather_source !== "K" + icao.toUpperCase()) ? ` (${raw.weather_source})` : ""}
                         </span>
                     </div>
                     <p className="text-sm text-gray-300 leading-relaxed">
-                        {timeline.t_12.summary || timeline.t_12}
+                        {timeline.t_12?.summary || timeline.t_12 || "Analysis unavailable"}
                     </p>
                 </div>
              </div>
-          ) : (
-            <div className="p-4 border border-neutral-800 rounded-lg text-center">
-                <p className="text-neutral-500 text-sm italic">Forecast (TAF) not available.</p>
-            </div>
           )}
 
           <div className="grid grid-cols-2 md:grid-cols-4 gap-4">

@@ -2,6 +2,7 @@ import os
 import json
 import re
 import math
+from datetime import datetime, timezone
 from openai import AsyncOpenAI
 from dotenv import load_dotenv
 from app.core.settings import settings
@@ -91,6 +92,15 @@ async def analyze_risk(icao_code, weather_data, notams, plane_size="small", repo
     
     # --- 2. PYTHON MATH ENGINE (Pre-Calculation) ---
     if has_weather:
+        # --- DEBUG START ---
+        print(f"DEBUG AI: ICAO={icao_code} Target={target_icao}")
+        print(f"DEBUG AI: METAR RAW={weather_data.get('metar')}")
+        print(f"DEBUG AI: Wind Parsed={parse_metar_wind(weather_data.get('metar'))}")
+        dbg_lookup = target_icao if target_icao else icao_code
+        dbg_rwy = get_runway_headings(dbg_lookup)
+        print(f"DEBUG AI: Runways Found ({dbg_lookup}) = {list(dbg_rwy.keys()) if dbg_rwy else 'None'}")
+        # --- DEBUG END ---
+
         # A. Instructions
         if is_same_airport:
              opening_instruction = f"Start the weather section exactly with: 'Conditions at {target_display} are...'"
@@ -111,7 +121,7 @@ async def analyze_risk(icao_code, weather_data, notams, plane_size="small", repo
 
             # Find Best Runway (Minimize Angle Difference / Max Headwind)
             best_rwy = None
-            best_score = -1 # Score = Headwind component
+            best_score = -9999
             
             for rwy_id, rwy_hdg in runways.items():
                 # Calc angular difference
@@ -127,6 +137,8 @@ async def analyze_risk(icao_code, weather_data, notams, plane_size="small", repo
                     best_score = headwind
                     best_rwy = (rwy_id, rwy_hdg)
             
+            print(f"DEBUG AI: Best Score={best_score}, Selected={best_rwy}")
+
             if best_rwy:
                 r_id, r_hdg = best_rwy
                 calc_rwy = r_id
@@ -139,13 +151,13 @@ async def analyze_risk(icao_code, weather_data, notams, plane_size="small", repo
                 # Determine Status
                 if raw_xwind > profile_limit:
                     calc_status = "EXCEEDS PROFILE"
-                    status_desc = f"exceeds the {profile_limit}kt limit"
+                    status_desc = f"exceeds the {profile_limit}kt threshold set"
                 elif raw_xwind >= (profile_limit - 5):
                     calc_status = "NEAR LIMITS"
-                    status_desc = f"is approaching the {profile_limit}kt limit"
+                    status_desc = f"is approaching the {profile_limit}kt threshold set"
                 else:
                     calc_status = "WITHIN LIMITS"
-                    status_desc = f"is within the {profile_limit}kt limit"
+                    status_desc = f"falls below the {profile_limit}kt threshold set"
 
                 # Construct the "Logic Trace" Sentence
                 source_tag = f" ({reporting_station})" if not is_same_airport else ""
@@ -153,10 +165,25 @@ async def analyze_risk(icao_code, weather_data, notams, plane_size="small", repo
                 
                 gust_text = f", gusting to {w_gust}kts" if w_gust > 0 else ""
                 
+                profile_name_map = {"small": "Small Aircraft", "medium": "Medium Aircraft", "large": "Large Aircraft"}
+                profile_display = profile_name_map.get(plane_size, "Selected")
+
                 xwind_analysis_text = (
                     f"Winds from {w_dir:03d}° at {w_spd}kts{source_tag}{gust_text}, create a {raw_xwind}kt crosswind component "
-                    f"on Runway {r_id}{dest_tag}. This {status_desc} for the selected aircraft profile."
+                    f"on Runway {r_id}{dest_tag}. This calculated crosswind component {status_desc} for the {profile_display} profile."
                 )
+            else:
+                 # Should theoretically not hit this with best_score = -9999
+                 xwind_analysis_text = "Crosswind calculations unavailable (Could not determine optimal runway)."
+                 
+        # --- IMPROVED ERROR FEEDBACK ---
+        elif not wind_data:
+            if "VRB" in weather_data['metar']:
+                xwind_analysis_text = "Crosswind calculations unavailable (Winds are Variable)."
+            else:
+                xwind_analysis_text = "Crosswind calculations unavailable (Wind data format not recognized)."
+        elif not runways:
+            xwind_analysis_text = f"Crosswind calculations unavailable (Runway data for {lookup_icao} not found in database)."
 
     # --- 3. AIRSPACE LOGIC ---
     if external_airspace_warnings:
@@ -166,17 +193,21 @@ async def analyze_risk(icao_code, weather_data, notams, plane_size="small", repo
         airspace_status_content = "No intersection with Permanent Prohibited/Restricted zones (P-40, DC SFRA, etc) detected."
     airspace_status_content += "\n(Verify dynamic TFRs at tfr.faa.gov)."
 
+    # --- 4. AI PROMPT CONSTRUCTION ---
+    current_time_str = datetime.now(timezone.utc).strftime("%H:%MZ")
+
     system_prompt = f"""
     You are a Weather Analysis Assistant providing data for pilot interpretation.
     AIRCRAFT PROFILE: {selected_profile}
     TARGET TIMEZONE: {airport_tz}
+    CURRENT TIME (UTC): {current_time_str}
     
     YOUR TASKS:
-    1. STRUCTURE: Return JSON with four summary strings: "summary_weather", "summary_crosswind", "summary_airspace", "summary_notams".
+    1. STRUCTURE: Return JSON with summary strings and a timeline object.
     
     2. WEATHER SUMMARY ("summary_weather"):
        - OPENING: {opening_instruction}
-       - CONTENT: Describe wind, visibility, clouds. Translate codes (e.g. "Winds are calm").
+       - CONTENT: Generate a comprehensive aviation weather narrative. Expand on wind conditions, visibility, cloud layers, and temperature/dewpoint spread. If present, detail significant weather phenomena.
        
     3. CROSSWIND SUMMARY ("summary_crosswind"):
        - MANDATORY: You MUST use the exact pre-calculated text provided below. Do not recalculate.
@@ -188,7 +219,18 @@ async def analyze_risk(icao_code, weather_data, notams, plane_size="small", repo
     5. NOTAMS SUMMARY ("summary_notams"):
        - Scan for MAJOR hazards. Translate to plain English. Single paragraph.
 
-    6. BUBBLES (UI DATA):
+    6. TIMELINE ("timeline"):
+       - Analyze the TAF raw text to find specific forecast change groups (FM, BECMG, TEMPO).
+       - RULE: Ignore any forecast periods starting within 1 hour of CURRENT TIME (immediate future).
+       - "t_06": The FIRST significant forecast period > 1 hour from now. 
+          - "time_label": Convert the forecast time to the target airport's LOCAL time (e.g. "From 2:00 PM EST"). Use the provided timezone: {airport_tz}.
+          - "summary": Brief description.
+       - "t_12": The NEXT significant forecast period immediately following the first one.
+          - "time_label": Convert to LOCAL time.
+          - "summary": Brief description.
+       - If TAF is missing, set values to "NO_TAF".
+
+    7. BUBBLES (UI DATA):
        - "wind": Format "DDD° @ SSkts" (or "DDD° @ SSkts | Gusting @ GGGkts").
        - "x_wind": Use the PRE-CALCULATED value: "{calc_xwind}kts".
        - "rwy": Use the PRE-CALCULATED value: "{calc_rwy}".
@@ -203,7 +245,10 @@ async def analyze_risk(icao_code, weather_data, notams, plane_size="small", repo
         "summary_crosswind": "...",
         "summary_airspace": "...",
         "summary_notams": "...",
-        "timeline": {{ ... }},
+        "timeline": {{
+            "t_06": {{ "time_label": "...", "summary": "..." }},
+            "t_12": {{ "time_label": "...", "summary": "..." }}
+        }},
         "bubbles": {{ 
             "wind": "...", 
             "x_wind": "{calc_xwind}kts",
@@ -217,6 +262,7 @@ async def analyze_risk(icao_code, weather_data, notams, plane_size="small", repo
     """
 
     user_content = f"""
+    CURRENT_UTC: {current_time_str}
     TARGET: {target_display}
     SOURCE: {weather_source_name}
     DIST: {dist:.1f}nm

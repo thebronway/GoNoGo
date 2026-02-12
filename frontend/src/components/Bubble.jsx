@@ -1,4 +1,5 @@
 import React from 'react';
+import FitText from './FitText';
 
 const Bubble = ({ label, value, subLabel, subValue, highlight, risk }) => {
   let colorClass = "bg-neutral-800 border-neutral-700";
@@ -42,11 +43,23 @@ const Bubble = ({ label, value, subLabel, subValue, highlight, risk }) => {
           </span>
           
           {/* PRIMARY VALUE */}
-          <span className={`font-bold ${textColor} text-center leading-tight whitespace-pre-line transition-all ${
-              contentParts[0] && contentParts[0].length > 15 ? 'text-sm md:text-lg' : 'text-lg md:text-2xl'
-          }`}>
-              {contentParts[0]}
-          </span>
+          {label === 'WIND' ? (
+             /* OLD LOGIC FOR WIND */
+             <div className="flex-1 flex items-center justify-center py-1">
+                <span className={`font-bold ${textColor} text-center leading-tight whitespace-pre-line transition-all ${
+                    contentParts[0] && contentParts[0].length > 15 ? 'text-sm md:text-lg' : 'text-lg md:text-2xl'
+                }`}>
+                    {contentParts[0]}
+                </span>
+             </div>
+          ) : (
+             /* FIT-TEXT LOGIC FOR OTHERS (Ceiling, Vis, Cat) */
+             <div className="flex-1 w-full min-h-0 relative flex items-center justify-center py-2">
+                <FitText className={textColor} multiline={true}>
+                    {contentParts[0]}
+                </FitText>
+             </div>
+          )}
 
           {/* SECONDARY LINE (GUSTS) */}
           {contentParts[1] && (
@@ -58,7 +71,7 @@ const Bubble = ({ label, value, subLabel, subValue, highlight, risk }) => {
 
       {/* SECTION 2 (BOTTOM) - Only renders if subValue exists */}
       {subValue && (
-        <div className="flex-1 flex flex-col justify-center items-center bg-black/10 pt-1">
+        <div className="flex-1 flex flex-col justify-center items-center pt-1">
              <span className="text-[9px] md:text-[10px] font-bold text-neutral-400 uppercase tracking-widest mb-0.5">
                 {subLabel}
              </span>

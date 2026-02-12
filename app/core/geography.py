@@ -1,6 +1,7 @@
 import airportsdata
 import math
 import httpx
+import aeronavx
 
 # Load Databases
 print("DEBUG: Loading airport databases...")
@@ -100,7 +101,8 @@ def check_airspace_zones(target_code, target_lat, target_lon):
 async def get_nearest_reporting_stations(target_code, limit=10):
     """
     Returns a LIST of tuples: [(icao, distance_nm), ...].
-    PRIORITIZES Large/Medium airports to ensure we find a valid weather station quickly.
+    PRIORITIZES Large/Medium airports within 25nm (likely to have TAFs).
+    FALLBACK to nearest airport (any type) within 50nm.
     """
     target_code = target_code.upper().strip()
     
@@ -115,9 +117,11 @@ async def get_nearest_reporting_stations(target_code, limit=10):
     target_lat = float(target['lat'])
     target_lon = float(target['lon'])
 
-    # Separate lists for prioritization
-    primary_candidates = []   # Likely to have METAR (Large/Medium or standard ICAO)
-    secondary_candidates = [] # Unlikely to have METAR (Small/Private/Alphanumeric)
+    # Bucket A: Priority (Large/Medium within 25nm) - High prob of TAF
+    priority_candidates = []
+    
+    # Bucket B: Fallback (Everything else within 50nm)
+    fallback_candidates = []
     
     for code, data in airports_icao.items():
         if code == target_code: 
@@ -127,54 +131,64 @@ async def get_nearest_reporting_stations(target_code, limit=10):
             lon = float(data['lon'])
             dist = calculate_distance(target_lat, target_lon, lat, lon)
             
-            if dist < 50: 
+            if dist <= 50: 
                 # CLASSIFY THE AIRPORT
-                # 'type' is typically 'large_airport', 'medium_airport', 'small_airport'
                 apt_type = data.get('type', 'small_airport')
-                
-                # HEURISTIC: Prioritize Medium/Large OR standard 4-letter codes (e.g. KDOV)
-                # Deprioritize alphanumeric codes (e.g. 6MD7) which rarely report weather.
                 is_major = apt_type in ['large_airport', 'medium_airport']
-                is_standard_icao = (len(code) == 4 and code.isalpha())
                 
-                if is_major or is_standard_icao:
-                    primary_candidates.append((code, dist))
+                # LOGIC: 
+                # 1. If Major Airport AND within 25nm -> Priority Bucket
+                # 2. Else -> Fallback Bucket
+                if is_major and dist <= 25:
+                    priority_candidates.append((code, dist))
                 else:
-                    secondary_candidates.append((code, dist))
+                    fallback_candidates.append((code, dist))
         except:
             continue
 
-    # Sort both lists by distance
-    primary_candidates.sort(key=lambda x: x[1])
-    secondary_candidates.sort(key=lambda x: x[1])
+    # Sort both lists by distance (closest first)
+    priority_candidates.sort(key=lambda x: x[1])
+    fallback_candidates.sort(key=lambda x: x[1])
     
-    # Merge: Priority first, then secondary
-    final_list = primary_candidates + secondary_candidates
+    # Merge: Priority first, then fallback
+    final_list = priority_candidates + fallback_candidates
     
     return final_list[:limit]
 
 def get_runway_headings(icao):
     """
-    Returns a dict of runway idents and their True headings.
+    Returns a dict of runway idents and their True headings using Aeronavx.
     Example: {'22R': 224.0, '04L': 44.0}
-    Checks ICAO first, then LID.
     """
     icao = icao.upper().strip()
-    data = airports_icao.get(icao)
     
-    # Fallback to LID if ICAO lookup fails
-    if not data:
-        data = airports_lid.get(icao)
+    # --- DEBUG START ---
+    print(f"DEBUG GEO: Looking up runways for '{icao}' via Aeronavx")
+    # --- DEBUG END ---
 
-    if not data or 'runways' not in data:
+    try:
+        # Aeronavx bundles the full OurAirports database
+        runways = aeronavx.get_runways_by_airport(icao)
+        
+        if not runways:
+            print(f"DEBUG GEO: Aeronavx found no runways for '{icao}'")
+            return {}
+
+        results = {}
+        for rwy in runways:
+            # Extract Low End (e.g. 04L)
+            if hasattr(rwy, 'le_ident') and hasattr(rwy, 'le_heading_degT'):
+                if rwy.le_ident and rwy.le_heading_degT:
+                     results[rwy.le_ident] = float(rwy.le_heading_degT)
+            
+            # Extract High End (e.g. 22R)
+            if hasattr(rwy, 'he_ident') and hasattr(rwy, 'he_heading_degT'):
+                 if rwy.he_ident and rwy.he_heading_degT:
+                      results[rwy.he_ident] = float(rwy.he_heading_degT)
+
+        print(f"DEBUG GEO: Found {len(results)} runways: {list(results.keys())}")
+        return results
+
+    except Exception as e:
+        print(f"DEBUG GEO: Aeronavx lookup failed: {e}")
         return {}
-
-    results = {}
-    for _, rwy in data['runways'].items():
-        # airportsdata provides both ends of the runway (le = low end, he = high end)
-        if 'le_ident' in rwy and rwy['le_heading_degT']:
-             results[rwy['le_ident']] = float(rwy['le_heading_degT'])
-        if 'he_ident' in rwy and rwy['he_heading_degT']:
-             results[rwy['he_ident']] = float(rwy['he_heading_degT'])
-             
-    return results
