@@ -1,10 +1,12 @@
 import os
 import json
 import re
+import math
 from openai import AsyncOpenAI
 from dotenv import load_dotenv
 from app.core.settings import settings
 from app.core.physics import calculate_crosswind
+from app.core.geography import get_runway_headings
 
 load_dotenv()
 
@@ -39,6 +41,25 @@ def format_visibility(val: str) -> str:
     
     return val # Return original if no mapping found or already a fraction
 
+def parse_metar_wind(metar_text):
+    """
+    Extracts Direction, Speed, and Gust from METAR text using Regex.
+    Returns (dir, speed, gust) or None.
+    """
+    if not metar_text: return None
+    # Regex for standard winds: DDDSSKT or DDDSSGGGKT (e.g., 27015G24KT)
+    regex = r'\b([0-9]{3}|VRB)([0-9]{2,3})(?:G([0-9]{2,3}))?KT\b'
+    match = re.search(regex, metar_text)
+    if match:
+        d_str, s_str, g_str = match.groups()
+        if d_str == "VRB": return None # Cannot calc crosswind for VRB
+        
+        direction = int(d_str)
+        speed = int(s_str)
+        gust = int(g_str) if g_str else 0
+        return direction, speed, gust
+    return None
+
 async def analyze_risk(icao_code, weather_data, notams, plane_size="small", reporting_station=None, reporting_station_name=None, airport_tz="UTC", external_airspace_warnings=[], dist=0, target_icao=""):
     
     profiles = {
@@ -47,36 +68,103 @@ async def analyze_risk(icao_code, weather_data, notams, plane_size="small", repo
         "large": "TBM/Citation (Max Crosswind: 30kts, High Altitude Capable)"
     }
     selected_profile = profiles.get(plane_size, profiles["small"])
+    
+    # Get Max Crosswind Limit for Math
+    limit_map = {"small": 15, "medium": 20, "large": 30}
+    profile_limit = limit_map.get(plane_size, 15)
 
-    # --- 1. SMART CONTEXT BUILDER (PYTHON SIDE) ---
+    # --- 1. CONTEXT BUILDER ---
     weather_source_name = reporting_station_name or reporting_station or icao_code
-    
-    # Create a nice display name: "General Edward... (KBOS)"
-    target_display = f"{icao_code} ({target_icao})" if target_icao else icao_code
-    
+    target_code = target_icao if target_icao else icao_code
+    target_display = reporting_station_name if reporting_station_name else target_code
     has_weather = weather_data.get('metar') is not None
     is_same_airport = (dist < 2.0) or (reporting_station == target_icao)
-    
-    if not has_weather:
-         opening_instruction = f"Start the weather section exactly with: 'No weather data available within 50nm of {target_display}.'"
-    elif is_same_airport:
-         opening_instruction = f"Start the weather section exactly with: 'Conditions at {target_display} are...'"
-    else:
-         opening_instruction = f"Start the weather section exactly with: 'Weather reported at {weather_source_name} ({dist:.1f}nm away) indicates...'"
 
-    # --- 2. AIRSPACE LOGIC (PYTHON SIDE) ---
-    # We construct the EXACT text we want here so the AI doesn't guess.
+    # Defaults for Prompt Injection
+    opening_instruction = "Start the weather section by stating weather data is unavailable."
+    xwind_analysis_text = "Crosswind calculations unavailable due to missing weather data."
+    
+    # Pre-calculated Bubble Data (defaults)
+    calc_rwy = "--"
+    calc_xwind = "--"
+    calc_status = "UNK"
+    
+    # --- 2. PYTHON MATH ENGINE (Pre-Calculation) ---
+    if has_weather:
+        # A. Instructions
+        if is_same_airport:
+             opening_instruction = f"Start the weather section exactly with: 'Conditions at {target_display} are...'"
+        else:
+             opening_instruction = f"Start the weather section exactly with: 'Weather reported at {weather_source_name} ({dist:.1f}nm away) indicates...'"
+
+        # B. Parse Wind
+        wind_data = parse_metar_wind(weather_data['metar'])
+        
+        # C. Get Runways for TARGET
+        # Use target_icao (e.g. KANP) if available, otherwise input icao
+        lookup_icao = target_icao if target_icao else icao_code
+        runways = get_runway_headings(lookup_icao)
+
+        if wind_data and runways:
+            w_dir, w_spd, w_gust = wind_data
+            calc_peak = max(w_spd, w_gust) # Always use peak for safety
+
+            # Find Best Runway (Minimize Angle Difference / Max Headwind)
+            best_rwy = None
+            best_score = -1 # Score = Headwind component
+            
+            for rwy_id, rwy_hdg in runways.items():
+                # Calc angular difference
+                diff = abs(w_dir - rwy_hdg)
+                if diff > 180: diff = 360 - diff
+                
+                # Headwind component = cos(theta) * speed
+                # We want to MAXIMIZE headwind
+                theta_rad = math.radians(diff)
+                headwind = calc_peak * math.cos(theta_rad)
+                
+                if headwind > best_score:
+                    best_score = headwind
+                    best_rwy = (rwy_id, rwy_hdg)
+            
+            if best_rwy:
+                r_id, r_hdg = best_rwy
+                calc_rwy = r_id
+                
+                # Calculate Crosswind for this best runway
+                # We reuse the logic: sin(diff) * speed
+                raw_xwind = calculate_crosswind(r_hdg, w_dir, calc_peak)
+                calc_xwind = str(raw_xwind)
+                
+                # Determine Status
+                if raw_xwind > profile_limit:
+                    calc_status = "EXCEEDS PROFILE"
+                    status_desc = f"exceeds the {profile_limit}kt limit"
+                elif raw_xwind >= (profile_limit - 5):
+                    calc_status = "NEAR LIMITS"
+                    status_desc = f"is approaching the {profile_limit}kt limit"
+                else:
+                    calc_status = "WITHIN LIMITS"
+                    status_desc = f"is within the {profile_limit}kt limit"
+
+                # Construct the "Logic Trace" Sentence
+                source_tag = f" ({reporting_station})" if not is_same_airport else ""
+                dest_tag = f" at {target_icao or icao_code}" if not is_same_airport else ""
+                
+                gust_text = f", gusting to {w_gust}kts" if w_gust > 0 else ""
+                
+                xwind_analysis_text = (
+                    f"Winds from {w_dir:03d}° at {w_spd}kts{source_tag}{gust_text}, create a {raw_xwind}kt crosswind component "
+                    f"on Runway {r_id}{dest_tag}. This {status_desc} for the selected aircraft profile."
+                )
+
+    # --- 3. AIRSPACE LOGIC ---
     if external_airspace_warnings:
         bullet_list = "\n".join([f"- {w}" for w in external_airspace_warnings])
-        airspace_status_content = f"""
-        WARNING - RESTRICTIONS DETECTED:
-        {bullet_list}
-        """
+        airspace_status_content = f"WARNING - RESTRICTIONS DETECTED:\n{bullet_list}"
     else:
         airspace_status_content = "No intersection with Permanent Prohibited/Restricted zones (P-40, DC SFRA, etc) detected."
-
-    # Common disclaimer added to both scenarios
-    airspace_status_content += "\n(MANDATORY: Pilots must always verify dynamic TFRs at tfr.faa.gov before flight.)"
+    airspace_status_content += "\n(Verify dynamic TFRs at tfr.faa.gov)."
 
     system_prompt = f"""
     You are a Weather Analysis Assistant providing data for pilot interpretation.
@@ -84,82 +172,44 @@ async def analyze_risk(icao_code, weather_data, notams, plane_size="small", repo
     TARGET TIMEZONE: {airport_tz}
     
     YOUR TASKS:
-    1. STRUCTURE: Do NOT return a single text block. You must return FOUR separate summary strings in the JSON output:
-       - "summary_weather"
-       - "summary_crosswind"
-       - "summary_airspace"
-       - "summary_notams"
+    1. STRUCTURE: Return JSON with four summary strings: "summary_weather", "summary_crosswind", "summary_airspace", "summary_notams".
     
     2. WEATHER SUMMARY ("summary_weather"):
        - OPENING: {opening_instruction}
-       - CONTENT: Describe wind, visibility, clouds.
-       - TRANSLATION RULE: NEVER use raw METAR codes in this text. Translate them (e.g., "Winds are calm").
-       - GRAMMAR: Do NOT use the word "The" before an airport name.
+       - CONTENT: Describe wind, visibility, clouds. Translate codes (e.g. "Winds are calm").
        
-    3. CROSSWIND DATA EXTRACTION:
-       - IDENTIFY: Find the best runway for the current wind.
-       - GUST MANDATE: Always use the peak gust for safety calculations.
-       - RAW DATA: Provide the raw runway heading (e.g., 220 for 22R) and the peak wind speed.
-       - PHRASING: The "summary_crosswind" text should explain the logic (e.g., "Using Runway 22R with an offset of 30 degrees...").
+    3. CROSSWIND SUMMARY ("summary_crosswind"):
+       - MANDATORY: You MUST use the exact pre-calculated text provided below. Do not recalculate.
+       - TEXT: "{xwind_analysis_text}"
 
     4. AIRSPACE SUMMARY ("summary_airspace"):
-       - CONTENT: Summarize the provided "AIRSPACE STATUS" block.
-       - Trust the python context implicitly.
+       - Summarize the provided "AIRSPACE STATUS" block.
 
     5. NOTAMS SUMMARY ("summary_notams"):
-       - CONTENT: Scan for MAJOR hazards. Translate technical notes to plain English.
-       - FORMAT: Provide a single, cohesive paragraph summarizing the key hazards. Do NOT use bullet points in this text section.
+       - Scan for MAJOR hazards. Translate to plain English. Single paragraph.
 
     6. BUBBLES (UI DATA):
-       - "wind": 
-         - **STRICT FORMAT RULE**: If winds are 00000KT, you MUST return exactly "Winds Calm".
-         - **STRICT FORMAT RULE**: For all other conditions, use the format "DDD° SSkts" (e.g., "050° 16kts"). DDD must be the 3-digit numeric heading.
-         - **GUST RULE**: If gusts are present, append " | Gust SSkts" (e.g., "050° 16kts | Gust 22kts"). Use the pipe symbol as a separator.
-         - **VARIABLE WINDS**: If direction is variable (VRB), use "VRB SSkts" (e.g., "VRB 04kts").
-       - "x_wind": Return ONLY the raw peak wind speed as an integer (e.g., 22).
-       - "rwy_heading": Return ONLY the 3-digit numeric heading of the best runway (e.g., 220).
-       - "rwy": The runway name (e.g., "22R")
-       - "visibility": CRITICAL: Use standard aviation fractions (e.g., "1 3/4 SM"). NEVER use decimals.
-       - "ceiling": 
-         - **STRICT LONGFORM RULE**: You MUST spell out full words (e.g., "Broken", "Overcast") and include "FT AGL" for ALL BKN or OVC layers.
-         - **STRICT MULTILINE RULE**: If there is more than one layer, you MUST put each layer on a new line. Do not use slashes or spaces between them; use a literal line break.
-         - **STRICT EXAMPLES**:
-           - METAR BKN020: "Broken 2000 FT AGL"
-           - METAR BKN020 OVC038: "Broken 2000 FT AGL\nOvercast 3800 FT AGL"
-           - METAR CLR: "Clear"
-         - Heights are always AGL (Above Ground Level).
-
-       - **RAW MATH DATA (MANDATORY)**:
-         - "rwy_heading_raw": Integer heading of the chosen runway (e.g., 220).
-         - "wind_dir_raw": Integer heading of the wind (e.g., 50).
-         - "wind_speed_raw": Integer of the PEAK wind or peak gust speed (e.g., 22).
-    
-    7. JSON ARRAYS:
-       - "airspace_warnings": ONLY include actual warnings. If the status is "No intersection...", return an EMPTY LIST [].
-       - "critical_notams": List the top 3-5 most critical notams (short summary).
+       - "wind": Format "DDD° @ SSkts" (or "DDD° @ SSkts | Gusting @ GGGkts").
+       - "x_wind": Use the PRE-CALCULATED value: "{calc_xwind}kts".
+       - "rwy": Use the PRE-CALCULATED value: "{calc_rwy}".
+       - "visibility": Use aviation fractions (e.g. "10 SM").
+       - "ceiling": Spell out layers (e.g. "Broken 2000 FT AGL"). Newline for multiple layers.
 
     OUTPUT JSON FORMAT ONLY:
     {{
         "flight_category": "VFR" | "MVFR" | "IFR" | "LIFR" | "UNK",
-        "crosswind_status": "WITHIN LIMITS" | "NEAR LIMITS" | "EXCEEDS PROFILE" | "UNK",
+        "crosswind_status": "{calc_status}",
         "summary_weather": "...",
         "summary_crosswind": "...",
         "summary_airspace": "...",
         "summary_notams": "...",
-        "timeline": {{ 
-            "t_06": {{ "time_label": "e.g. From 2:00 PM EST", "summary": "..." }}, 
-            "t_12": {{ "time_label": "...", "summary": "..." }}
-        }},
+        "timeline": {{ ... }},
         "bubbles": {{ 
             "wind": "...", 
-            "x_wind": "...",
-            "rwy": "...",
-            "rwy_heading_raw": 0,
-            "wind_dir_raw": 0,
-            "wind_speed_raw": 0,
+            "x_wind": "{calc_xwind}kts",
+            "rwy": "{calc_rwy}",
             "visibility": "...", 
-            "ceiling": "...", 
-            "temp": "..." 
+            "ceiling": "..."
         }},
         "airspace_warnings": ["..."],
         "critical_notams": ["..."]
@@ -167,13 +217,10 @@ async def analyze_risk(icao_code, weather_data, notams, plane_size="small", repo
     """
 
     user_content = f"""
-    TARGET AIRPORT: {target_display}
-    WEATHER SOURCE: {weather_source_name} ({reporting_station or icao_code})
-    DISTANCE TO TARGET: {dist:.1f}nm
-    
-    AIRSPACE STATUS:
-    {airspace_status_content}
-    
+    TARGET: {target_display}
+    SOURCE: {weather_source_name}
+    DIST: {dist:.1f}nm
+    AIRSPACE: {airspace_status_content}
     METAR: {weather_data.get('metar', 'N/A')}
     TAF: {weather_data.get('taf', 'N/A')}
     NOTAMS: {str(notams)} 
@@ -197,53 +244,40 @@ async def analyze_risk(icao_code, weather_data, notams, plane_size="small", repo
 
         raw_content = response.choices[0].message.content
         cleaned_content = clean_json_string(raw_content)
-        
         result = json.loads(cleaned_content)
+        
+        # --- POST-PROCESSING ---
+        if "unavailable" not in xwind_analysis_text.lower():
+            result["summary_crosswind"] = xwind_analysis_text
 
-        # Fail-safe cleaning for visibility and PHYSICS OVERRIDE for crosswind
+        # 2. HARD OVERRIDE: Bubbles
         if "bubbles" in result:
-            # 1. Fix Visibility
-            if "visibility" in result["bubbles"]:
+             # Force the Python Math into the bubble
+             result["bubbles"]["x_wind"] = f"{calc_xwind}kts" if calc_xwind != "--" else "--"
+             result["bubbles"]["rwy"] = calc_rwy
+             
+             # Still fix visibility formatting
+             if "visibility" in result["bubbles"]:
                 result["bubbles"]["visibility"] = format_visibility(result["bubbles"]["visibility"])
-            
-            # 2. Exact Crosswind Calculation (Override AI's guess)
-            # We pull the raw ingredients identified by the AI
-            rwy_h = result["bubbles"].get("rwy_heading_raw", 0)
-            w_dir = result["bubbles"].get("wind_dir_raw", 0)
-            w_spd = result["bubbles"].get("wind_speed_raw", 0)
-            
-            # Call our Python math engine
-            x_wind_value = calculate_crosswind(rwy_h, w_dir, w_spd)
-            
-            # Update the display bubble with the verified number
-            result["bubbles"]["x_wind"] = f"{x_wind_value}kts"
-            
-            # Cleanup: Remove raw fields so they don't clutter the UI frontend
-            result["bubbles"].pop("rwy_heading_raw", None)
-            result["bubbles"].pop("wind_dir_raw", None)
-            result["bubbles"].pop("wind_speed_raw", None)
+
+        # 3. HARD OVERRIDE: Status Color
+        result["crosswind_status"] = calc_status
         
-        result['_meta'] = {
-            "tokens": tokens,
-            "model": model_used
-        }
-        
+        result['_meta'] = { "tokens": tokens, "model": model_used }
         return result
 
     except Exception as e:
         print(f"AI ERROR: {e}")
+        # Return Error Structure
         return {
             "flight_category": "UNK",
-            "crosswind_status": "WITHIN LIMITS",
-            "summary_weather": f"AI Parsing Error: {str(e)}",
+            "crosswind_status": "UNK",
+            "summary_weather": f"AI Error: {str(e)}",
             "summary_crosswind": "--",
             "summary_airspace": "--",
             "summary_notams": "--",
-            "timeline": {
-                "t_06": {"time_label": "--", "summary": "Forecast unavailable"}, 
-                "t_12": {"time_label": "--", "summary": "--"}
-            },
-            "bubbles": {"wind": "--", "visibility": "--", "ceiling": "--", "temp": "--"},
+            "timeline": {},
+            "bubbles": {},
             "airspace_warnings": [],
             "critical_notams": []
         }

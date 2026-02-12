@@ -32,6 +32,148 @@ const NOTAMScroller = ({ notams }) => {
     );
 };
 
+const BriefingScroller = ({ analysis, isDifferent, source, target }) => {
+    const [activeIndex, setActiveIndex] = useState(0);
+    const [transitionDuration, setTransitionDuration] = useState(2000);
+    const [offsets, setOffsets] = useState([]);
+    const [shouldScroll, setShouldScroll] = useState(false);
+    
+    const containerRef = React.useRef(null);
+
+    // Define sections data to keep JSX clean and allowing duplication
+    const sections = [
+        {
+            id: 'weather',
+            title: `CURRENT WEATHER ${isDifferent ? `(${source})` : ""}`,
+            content: analysis.summary_weather
+        },
+        {
+            id: 'crosswind',
+            title: `CROSSWIND FOR ${target}`,
+            content: analysis.summary_crosswind
+        },
+        {
+            id: 'airspace',
+            title: `AIRSPACE ${isDifferent ? `(${target})` : ""}`,
+            content: analysis.summary_airspace
+        },
+        {
+            id: 'notams',
+            title: `NOTABLE NOTAMS ${isDifferent ? `(${target})` : ""}`,
+            content: analysis.summary_notams
+        }
+    ];
+
+    // 1. Measure and determine if we need to scroll (overflow check)
+    React.useLayoutEffect(() => {
+        const container = containerRef.current;
+        if (!container) return;
+
+        // Reset to initial state when data changes
+        setTransitionDuration(0);
+        setActiveIndex(0);
+
+        const timeout = setTimeout(() => {
+            const parent = container.parentElement;
+            // Measure height of the "Unique" content (first 4 items)
+            // We approximate this by taking the container height. 
+            // If we are already looping, this might be large, but the logic holds:
+            // If the content fits, we don't need to loop.
+            
+            // To be safe, we check if the offsets of the last unique item exceed view height.
+            const children = Array.from(container.children);
+            const uniqueCount = sections.length;
+            
+            // If we haven't rendered duplicate yet, children.length is 4.
+            // If we have, it is 5. We only care about the first 4.
+            const lastUniqueItem = children[uniqueCount - 1];
+            
+            if (lastUniqueItem) {
+                const contentBottom = lastUniqueItem.offsetTop + lastUniqueItem.offsetHeight;
+                const viewHeight = parent.offsetHeight;
+                setShouldScroll(contentBottom > viewHeight);
+            }
+        }, 100);
+
+        return () => clearTimeout(timeout);
+    }, [analysis]);
+
+    // 2. Measure Offsets (Whenever render changes)
+    React.useLayoutEffect(() => {
+        const container = containerRef.current;
+        if (!container) return;
+        
+        // Measure all children (including duplicate if present)
+        const newOffsets = Array.from(container.children).map(child => child.offsetTop);
+        setOffsets(newOffsets);
+    }, [shouldScroll, analysis]);
+
+
+    // 3. The Infinite Loop Timer
+    useEffect(() => {
+        if (!shouldScroll || offsets.length === 0) return;
+
+        const interval = setInterval(() => {
+            setActiveIndex(prev => {
+                const next = prev + 1;
+                // If next is beyond our list (shouldn't happen with snap logic), reset.
+                return next >= offsets.length ? 0 : next;
+            });
+            // Ensure animation is on for the move
+            setTransitionDuration(2000);
+        }, 8000);
+
+        return () => clearInterval(interval);
+    }, [offsets, shouldScroll]);
+
+
+    // 4. The "Snap" Logic (Teleport from Duplicate to Start)
+    useEffect(() => {
+        // If we are at the last item (The Duplicate)
+        if (shouldScroll && activeIndex === offsets.length - 1) {
+            // Wait for the slide animation (2000ms) to finish
+            const timeout = setTimeout(() => {
+                // Disable transition
+                setTransitionDuration(0);
+                // Teleport to index 0 (Visual Match)
+                setActiveIndex(0);
+            }, 2000);
+            return () => clearTimeout(timeout);
+        }
+    }, [activeIndex, shouldScroll, offsets.length]);
+
+
+    // Prepare list: If scrolling, append the first section at the end
+    const itemsToRender = shouldScroll ? [...sections, sections[0]] : sections;
+    
+    const currentTranslateY = (offsets[activeIndex] !== undefined) ? -offsets[activeIndex] : 0;
+
+    return (
+        <div className="flex-1 min-h-0 relative overflow-hidden flex flex-col">
+             <div 
+                ref={containerRef}
+                className="ease-in-out pb-24"
+                style={{ 
+                    transform: `translateY(${currentTranslateY}px)`,
+                    transitionDuration: `${transitionDuration}ms`,
+                    transitionProperty: 'transform'
+                }}
+             >
+                {itemsToRender.map((section, index) => (
+                    <div key={`${section.id}-${index}`} className="mb-16">
+                        <h3 className="text-blue-400 font-bold uppercase tracking-widest mb-2 border-b border-blue-900/30 w-fit">
+                            {section.title}
+                        </h3>
+                        <p className="text-xl leading-relaxed text-gray-200">
+                            {section.content || "No data."}
+                        </p>
+                    </div>
+                ))}
+             </div>
+        </div>
+    );
+};
+
 const TimelineCard = ({ title, summary }) => (
     <div className="bg-neutral-800 border border-neutral-700 rounded-xl p-4 flex flex-col h-full relative overflow-hidden">
         <div className="border-b border-neutral-700 pb-2 mb-2 shrink-0">
@@ -75,6 +217,7 @@ const KioskDisplay = () => {
     const [loading, setLoading] = useState(true);
     const [lastMetarRaw, setLastMetarRaw] = useState(null);
     const [currentTime, setCurrentTime] = useState(new Date());
+    const [weatherSource, setWeatherSource] = useState(null);
 
     const PROFILE_LIMITS = {
         small: "15KTS",
@@ -128,7 +271,10 @@ const KioskDisplay = () => {
             if (!config) return;
 
             try {
-                const res = await api.get(`/api/kiosk/peek/${icao}`);
+                // Pass the actual source (e.g. nearest station) to ensure we poll the right airport
+                const query = weatherSource ? `?source=${weatherSource}` : "";
+                const res = await api.get(`/api/kiosk/peek/${icao}${query}`);
+                
                 if (res.status === "success" && res.raw_metar) {
                     const cleanNew = res.raw_metar.replace(/\s/g, '');
                     const cleanOld = lastMetarRaw ? lastMetarRaw.replace(/\s/g, '') : '';
@@ -154,6 +300,8 @@ const KioskDisplay = () => {
             });
             setData(res);
             setLastMetarRaw(res.raw_data?.metar);
+            setWeatherSource(res.raw_data?.weather_source);
+            document.title = `${icao.toUpperCase()} | WxDecoder`;
         } catch (e) {
             console.error("Analysis load failed", e);
         } finally {
@@ -185,8 +333,10 @@ const KioskDisplay = () => {
             <div className="flex justify-between items-end border-b-2 border-neutral-800 pb-4 shrink-0">
                 <div className="flex items-center gap-10">
                     <img src="/logo.webp" className="h-20 w-auto object-contain" />
-                    <div>
-                        <h1 className="text-6xl font-black tracking-tighter text-white leading-none">{data.airport_name}</h1>
+                    <div className="min-w-0 flex-1 pr-6">
+                        <h1 className="text-4xl md:text-6xl font-black tracking-tighter text-white leading-none truncate whitespace-nowrap">
+                            {data.airport_name}
+                        </h1>
                         <div className="flex items-center gap-6 mt-3">
                             <span className="bg-blue-900/30 text-blue-400 border border-blue-800 px-3 py-1 rounded text-xl font-bold font-mono">
                                 {icao.toUpperCase()}
@@ -239,7 +389,7 @@ const KioskDisplay = () => {
                 <div className="col-span-8 flex flex-col gap-6 h-full min-h-0">
                     
                     {/* 1. Current Conditions Bubbles (Standard Labels) - Auto Height, Flex-None */}
-                    <div className="grid grid-cols-4 gap-4 flex-none mb-6">
+                    <div className="grid grid-cols-4 gap-4 flex-none mb-6 h-40">
                         <Bubble label="CATEGORY" value={analysis.flight_category} highlight={true} />
                         {/* Split Wind Bubble */}
                         <Bubble 
@@ -266,47 +416,21 @@ const KioskDisplay = () => {
                     </div>
 
                     {/* 3. AI Briefing Box - Takes Remaining Space */}
-                    <div className="bg-neutral-800/40 border border-neutral-700/50 rounded-2xl p-6 flex-1 min-h-0 overflow-hidden relative shadow-2xl flex flex-col">
+                    <div className="bg-neutral-800/40 border border-neutral-700/50 rounded-2xl p-6 flex-1 min-h-0 relative shadow-2xl flex flex-col overflow-hidden">
                          <h2 className="text-neutral-500 text-xs font-bold uppercase tracking-widest mb-4 border-b border-neutral-700 pb-2 flex items-center gap-2 shrink-0">
                             Briefing Overview
                          </h2>
-                         
-                         <div className="text-xl leading-relaxed text-gray-200 space-y-6 overflow-y-auto pb-12">
-                            {/* WEATHER */}
-                            <div>
-                                <h3 className="text-blue-400 font-bold uppercase tracking-widest mb-2 border-b border-blue-900/30 w-fit">
-                                    CURRENT WEATHER {isDifferent ? `(${source})` : ""}
-                                </h3>
-                                <p>{analysis.summary_weather || "No data."}</p>
-                            </div>
 
-                            {/* CROSSWIND */}
-                            <div>
-                                <h3 className="text-blue-400 font-bold uppercase tracking-widest mb-2 border-b border-blue-900/30 w-fit">
-                                    CROSSWIND {isDifferent ? `(${source})` : ""}
-                                </h3>
-                                <p>{analysis.summary_crosswind || "No data."}</p>
-                            </div>
-
-                            {/* AIRSPACE */}
-                            <div>
-                                <h3 className="text-blue-400 font-bold uppercase tracking-widest mb-2 border-b border-blue-900/30 w-fit">
-                                    AIRSPACE {isDifferent ? `(${target})` : ""}
-                                </h3>
-                                <p>{analysis.summary_airspace || "No data."}</p>
-                            </div>
-
-                            {/* NOTAMS */}
-                            <div>
-                                <h3 className="text-blue-400 font-bold uppercase tracking-widest mb-2 border-b border-blue-900/30 w-fit">
-                                    NOTABLE NOTAMS {isDifferent ? `(${target})` : ""}
-                                </h3>
-                                <p>{analysis.summary_notams || "No data."}</p>
-                            </div>
-                         </div>
+                         {/* NEW SCROLLER COMPONENT */}
+                         <BriefingScroller 
+                            analysis={analysis} 
+                            isDifferent={isDifferent} 
+                            source={source} 
+                            target={target} 
+                         />
                          
                          {/* Warnings Footer */}
-                         <div className="absolute bottom-0 left-0 right-0 bg-neutral-900/95 p-3 border-t border-red-900/50 flex items-center justify-between gap-4 overflow-hidden">
+                         <div className="absolute bottom-0 left-0 right-0 bg-neutral-900/95 p-3 border-t border-red-900/50 flex items-center justify-between gap-4 overflow-hidden z-20">
                             <div className="flex gap-4 overflow-x-auto whitespace-nowrap">
                                 {analysis.airspace_warnings.map((w,i) => (
                                     <span key={i} className="text-red-400 font-bold flex items-center gap-2 text-base">

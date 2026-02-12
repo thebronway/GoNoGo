@@ -29,26 +29,36 @@ const Bubble = ({ label, value, subLabel, subValue, highlight, risk }) => {
     }
   }
 
+  // Split content if it has a pipe (for Wind Gusts)
+  const contentParts = value ? value.split('|') : [];
+
   return (
-    <div className={`${colorClass} ${riskAnimation} border rounded-xl h-full min-h-[7.5rem] p-1 flex flex-col relative overflow-hidden transition-colors duration-300`}>
+    <div className={`${colorClass} ${riskAnimation} border rounded-xl h-full min-h-[7.5rem] p-2 flex flex-col relative overflow-hidden transition-colors duration-300`}>
       
       {/* SECTION 1 (TOP) */}
-      <div className={`flex-1 flex flex-col justify-center items-center ${subValue ? 'border-b border-white/10' : ''}`}>
-          <span className="text-[9px] md:text-[10px] font-bold text-neutral-400 uppercase tracking-widest mb-0.5">
+      <div className={`flex-1 flex flex-col justify-center items-center ${subValue ? 'border-b border-white/10 mb-1 pb-1' : ''}`}>
+          <span className="text-[9px] md:text-[10px] font-bold text-neutral-400 uppercase tracking-widest mb-1">
             {label}
           </span>
-          <span className={`font-bold ${textColor} text-center leading-tight transition-all whitespace-pre-line ${
-              value && value.length > 40 ? 'text-[10px] md:text-xs' : 
-              value && value.length > 30 ? 'text-sm md:text-base' : 
-              'text-lg md:text-xl'
+          
+          {/* PRIMARY VALUE */}
+          <span className={`font-bold ${textColor} text-center leading-tight whitespace-pre-line transition-all ${
+              contentParts[0] && contentParts[0].length > 15 ? 'text-sm md:text-lg' : 'text-lg md:text-2xl'
           }`}>
-              {value}
+              {contentParts[0]}
           </span>
+
+          {/* SECONDARY LINE (GUSTS) */}
+          {contentParts[1] && (
+            <span className="text-xs md:text-sm text-neutral-300 font-medium mt-1 animate-pulse">
+                {contentParts[1].trim()}
+            </span>
+          )}
       </div>
 
       {/* SECTION 2 (BOTTOM) - Only renders if subValue exists */}
       {subValue && (
-        <div className="flex-1 flex flex-col justify-center items-center bg-black/10">
+        <div className="flex-1 flex flex-col justify-center items-center bg-black/10 pt-1">
              <span className="text-[9px] md:text-[10px] font-bold text-neutral-400 uppercase tracking-widest mb-0.5">
                 {subLabel}
              </span>

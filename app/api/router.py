@@ -1,5 +1,5 @@
 from fastapi import APIRouter
-from app.api.endpoints import analysis, admin, report, kiosk, calculator
+from app.api.endpoints import analysis, admin, report, kiosk, calculator, contact
 
 router = APIRouter()
 
@@ -20,3 +20,6 @@ router.include_router(admin.router, prefix="/api", tags=["stats"])
 
 # /api/calculator
 router.include_router(calculator.router, prefix="/api/calculator", tags=["calculator"])
+
+# /api/contact
+router.include_router(contact.router, prefix="/api/contact", tags=["contact"])

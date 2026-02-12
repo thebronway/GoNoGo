@@ -196,7 +196,7 @@ async def analyze_flight(request: AnalysisRequest, raw_request: Request, backgro
         t0 = time.time()
         
         analysis = await analyze_risk(
-            icao_code=airport_name, 
+            icao_code=resolved_icao,
             weather_data=weather_data,
             notams=notams,
             plane_size=request.plane_size,
@@ -204,7 +204,8 @@ async def analyze_flight(request: AnalysisRequest, raw_request: Request, backgro
             reporting_station_name=weather_name,
             airport_tz=airport_tz, 
             external_airspace_warnings=airspace_warnings,
-            dist=weather_dist
+            dist=weather_dist,
+            target_icao=resolved_icao
         )
         t_ai = time.time() - t0
 

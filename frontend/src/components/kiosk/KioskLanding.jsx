@@ -1,5 +1,7 @@
 import React from 'react';
 import { Monitor, CheckCircle2, Tv, RefreshCw, BrainCircuit, ExternalLink, Mail } from 'lucide-react';
+import KioskInquiryModal from './KioskInquiryModal';
+import { useState } from 'react';
 import { Link } from 'react-router-dom';
 import SEO from '../SEO';
 
@@ -31,7 +33,11 @@ const ExampleLink = ({ code, name, profile }) => (
 );
 
 const KioskLanding = () => {
+  const [showModal, setShowModal] = useState(false);
+
   return (
+    <>
+    <KioskInquiryModal isOpen={showModal} onClose={() => setShowModal(false)} />
     <div className="max-w-6xl mx-auto pt-10 px-6 pb-20">
       <SEO 
         title="WxDecoder Kiosk Mode - Digital Aviation Weather Kiosk"
@@ -120,7 +126,7 @@ const KioskLanding = () => {
               
               <button 
                 className="w-full bg-white hover:bg-gray-200 text-black font-bold py-4 px-8 rounded-xl transition-all flex items-center justify-center gap-2"
-                onClick={() => alert("Contact feature coming soon.")}
+                onClick={() => setShowModal(true)}
               >
                   <Mail size={18} /> Contact To Setup
               </button>
@@ -129,6 +135,7 @@ const KioskLanding = () => {
 
       </div>
     </div>
+    </>
   );
 };
 

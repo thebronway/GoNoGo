@@ -152,3 +152,29 @@ async def get_nearest_reporting_stations(target_code, limit=10):
     final_list = primary_candidates + secondary_candidates
     
     return final_list[:limit]
+
+def get_runway_headings(icao):
+    """
+    Returns a dict of runway idents and their True headings.
+    Example: {'22R': 224.0, '04L': 44.0}
+    Checks ICAO first, then LID.
+    """
+    icao = icao.upper().strip()
+    data = airports_icao.get(icao)
+    
+    # Fallback to LID if ICAO lookup fails
+    if not data:
+        data = airports_lid.get(icao)
+
+    if not data or 'runways' not in data:
+        return {}
+
+    results = {}
+    for _, rwy in data['runways'].items():
+        # airportsdata provides both ends of the runway (le = low end, he = high end)
+        if 'le_ident' in rwy and rwy['le_heading_degT']:
+             results[rwy['le_ident']] = float(rwy['le_heading_degT'])
+        if 'he_ident' in rwy and rwy['he_heading_degT']:
+             results[rwy['he_ident']] = float(rwy['he_heading_degT'])
+             
+    return results

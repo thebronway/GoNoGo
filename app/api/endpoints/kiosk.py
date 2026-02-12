@@ -30,16 +30,15 @@ async def get_kiosk_config(icao: str):
     }
 
 @router.get("/peek/{icao}")
-async def peek_weather(icao: str):
+async def peek_weather(icao: str, source: str = None):
     """
     Lightweight poller. Fetches ONLY raw weather to check for updates.
-    Does NOT trigger AI or Cache logic.
+    If 'source' is provided (e.g. nearest reporting station), checks that instead.
     """
-    icao = icao.upper().strip()
+    target = source.upper().strip() if source else icao.upper().strip()
     
-    # Reuse the existing weather fetcher, it's efficient enough
-    # It returns { "metar": "...", "taf": "..." } or None
-    data = await get_metar_taf(icao)
+    # Reuse the existing weather fetcher
+    data = await get_metar_taf(target)
     
     if not data or not data['metar']:
         return {"status": "unavailable", "raw_metar": None}
