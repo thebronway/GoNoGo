@@ -1,9 +1,9 @@
 import React, { useState, useEffect } from 'react';
-import { Link } from 'react-router-dom';
+import { Link, useParams } from 'react-router-dom';
 import Bubble from './Bubble';
 import SEO from './SEO';
 import ReportModal from './ReportModal';
-import { TriangleAlert, Clock, Flag, Info } from 'lucide-react';
+import { TriangleAlert, Clock, Flag, Info, Loader2 } from 'lucide-react';
 
 const getClientId = () => {
   let id = localStorage.getItem("gonogo_client_id");
@@ -42,23 +42,34 @@ const formatTaf = (tafText) => {
 };
 
 const Dashboard = ({ onSearchStateChange }) => {
+  const { icaoParam } = useParams(); // Capture URL param
   const [icao, setIcao] = useState('');
   const [plane, setPlane] = useState('small');
   const [loading, setLoading] = useState(false);
   const [data, setData] = useState(null);
   const [error, setError] = useState(null);
+  const [suggestions, setSuggestions] = useState([]); // New State
   const [showReport, setShowReport] = useState(false);
 
+  // Handle Auto-Search from URL
   useEffect(() => {
+    if (icaoParam) {
+      setIcao(icaoParam.toUpperCase());
+      handleAnalyze(icaoParam.toUpperCase());
+    }
     if (onSearchStateChange) onSearchStateChange(false);
-  }, []);
+  }, [icaoParam]);
 
-  const handleAnalyze = async () => {
-    if (!icao) return alert("Enter ICAO");
+  const handleAnalyze = async (overrideIcao = null) => {
+    // Use override if provided (for auto-search), otherwise use state
+    const targetIcao = typeof overrideIcao === 'string' ? overrideIcao : icao;
+    
+    if (!targetIcao) return alert("Enter ICAO");
     setLoading(true);
     setError(null);
+    setSuggestions([]); // Clear previous suggestions
     
-    const payload = { icao: icao, plane_size: plane };
+    const payload = { icao: targetIcao, plane_size: plane };
 
     try {
       const response = await fetch("/api/analyze", {
@@ -74,7 +85,13 @@ const Dashboard = ({ onSearchStateChange }) => {
         let errorDetail = "An unexpected error occurred.";
         try {
           const errorData = await response.json();
-          if (errorData.detail) errorDetail = errorData.detail;
+          // Handle Structured 404 with Suggestions
+          if (errorData.detail && typeof errorData.detail === 'object') {
+             errorDetail = errorData.detail.message;
+             if (errorData.detail.suggestions) setSuggestions(errorData.detail.suggestions);
+          } else if (errorData.detail) {
+             errorDetail = errorData.detail;
+          }
         } catch (e) {
           errorDetail = `Server error: ${response.status} ${response.statusText}`;
         }
@@ -194,7 +211,30 @@ const Dashboard = ({ onSearchStateChange }) => {
         </div>
       </div>
 
+      {loading && (
+        <div className="flex justify-center py-12 animate-fade-in">
+            <Loader2 className="w-12 h-12 text-blue-500 animate-spin" />
+        </div>
+      )}
+
       {error && <div className="p-4 bg-red-900/50 text-red-200 border border-red-700 rounded animate-fade-in">{error}</div>}
+
+      {/* Did You Mean? Suggestions */}
+      {suggestions.length > 0 && (
+        <div className="grid gap-2 animate-fade-in max-w-lg mx-auto">
+           <p className="text-xs text-gray-400 font-bold uppercase tracking-widest text-center mb-1">Did you mean?</p>
+           {suggestions.map(s => (
+              <button 
+                key={s.icao} 
+                onClick={() => { setIcao(s.icao); handleAnalyze(s.icao); }}
+                className="flex items-center justify-between bg-neutral-800 hover:bg-neutral-700 border border-neutral-700 p-3 rounded-lg transition-colors text-left group"
+              >
+                <span className="font-bold text-white group-hover:text-blue-400 transition-colors">{s.icao}</span>
+                <span className="text-sm text-gray-400 truncate ml-2">{s.name}</span>
+              </button>
+           ))}
+        </div>
+      )}
 
       {data && analysis && (
         <div className="space-y-8 animate-fade-in">

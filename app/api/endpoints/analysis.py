@@ -3,6 +3,7 @@ import datetime
 import asyncio
 import re
 import logging
+import difflib
 from typing import Optional
 from fastapi import APIRouter, Request, HTTPException, BackgroundTasks
 from pydantic import BaseModel
@@ -82,9 +83,79 @@ async def analyze_flight(request: AnalysisRequest, raw_request: Request, backgro
         remote_data = await get_coords_from_awc(raw_input)
         
         if not remote_data:
+            suggestions = []
+            raw_upper = raw_input.upper()
+
+            # --- 1. GATHER KEYS ---
+            # Merge ICAO and LID keys for searching
+            all_keys = list(airports_icao.keys()) + list(airports_lid.keys())
+
+            # --- 2. FUZZY CODE MATCHING (Handles "KFFAA" -> "KFFA" & "FFAA" -> "KFFA") ---
+            # Only run fuzzy match if input is code-like (short, no spaces)
+            if len(raw_upper) <= 7 and " " not in raw_upper:
+                # cutoff=0.6 allows for 1-2 character differences/typos
+                close_matches = difflib.get_close_matches(raw_upper, all_keys, n=3, cutoff=0.6)
+                for m in close_matches:
+                    data = airports_icao.get(m) or airports_lid.get(m)
+                    if data: suggestions.append({"icao": m, "name": data['name']})
+
+            # --- 3. CONFUSABLES (Handles 1 vs I vs L, 0 vs O) ---
+            # Explicitly check for common visual swaps
+            def get_variants(s):
+                vars = set()
+                # 1 <-> I <-> L
+                if '1' in s: vars.add(s.replace('1', 'I')); vars.add(s.replace('1', 'L'))
+                if 'I' in s: vars.add(s.replace('I', '1'))
+                if 'L' in s: vars.add(s.replace('L', '1'))
+                # 0 <-> O
+                if '0' in s: vars.add(s.replace('0', 'O'))
+                if 'O' in s: vars.add(s.replace('O', '0'))
+                return vars
+
+            for v in get_variants(raw_upper):
+                if v == raw_upper: continue
+                if v in airports_icao:
+                    suggestions.append({"icao": v, "name": airports_icao[v]['name']})
+                elif v in airports_lid:
+                    suggestions.append({"icao": v, "name": airports_lid[v]['name']})
+
+            # --- 4. NAME SEARCH (STRICTER) ---
+            # Fixes "CIA" matching "Social Circle" (1OL2)
+            # Only scan names if we don't have enough suggestions yet
+            if len(suggestions) < 5:
+                count = 0
+                for code, data in airports_icao.items():
+                    if count >= 5: break
+                    name_up = data['name'].upper()
+                    
+                    # LOGIC:
+                    # If input is short (<=3), MUST start with input (e.g. "CIA" -> "CIA Field")
+                    # If input is long (>3), can be contained in (e.g. "KENNEDY" -> "John F Kennedy")
+                    is_match = False
+                    if len(raw_upper) <= 3:
+                        if name_up.startswith(raw_upper): is_match = True
+                    else:
+                        if raw_upper in name_up: is_match = True
+                    
+                    if is_match:
+                        suggestions.append({"icao": code, "name": data['name']})
+                        count += 1
+
+            # --- DEDUPLICATE & FORMAT ---
+            seen = set()
+            final_suggestions = []
+            for s in suggestions:
+                if s['icao'] not in seen:
+                    final_suggestions.append(s)
+                    seen.add(s['icao'])
+
+            # Raise 404 with structured detail
             raise HTTPException(
                 status_code=404, 
-                detail=f"Airport '{raw_input}' not found. Please verify the ICAO or LID code."
+                detail={
+                    "message": f"Airport '{raw_input}' not found.",
+                    "suggestions": final_suggestions[:5]
+                }
             )
         input_icao = raw_input
     

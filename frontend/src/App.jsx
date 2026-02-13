@@ -146,6 +146,9 @@ const AppContent = () => {
              <Route path="/kiosk" element={<KioskLanding />} />
              <Route path="/kiosk/:slug" element={<KioskDisplay />} />
 
+             <Route path="/airport/:icaoParam" element={<Dashboard onSearchStateChange={setHasResults} />} />
+             <Route path="/search/:icaoParam" element={<Dashboard onSearchStateChange={setHasResults} />} />
+
              <Route path="*" element={<NotFound />} />
            </Routes>
         </main>

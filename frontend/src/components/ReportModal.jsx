@@ -65,7 +65,7 @@ const ReportModal = ({ isOpen, onClose, contextData = null }) => {
                     <CheckCircle2 size={32} />
                 </div>
                 <h4 className="text-xl font-bold text-white">Report Sent</h4>
-                <p className="text-neutral-400">Thank you for helping us improve GoNoGo.</p>
+                <p className="text-neutral-400">Thank you for helping us improve WxDecoder.</p>
             </div>
         ) : (
             <form onSubmit={handleSubmit} className="p-6 space-y-4">

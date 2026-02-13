@@ -25,48 +25,58 @@ async def submit_report(data: ReportRequest, request: Request, background_tasks:
         return {"status": "success"}
 
     # 3. Format the Notification
-    lines = [f"📢 **User Report**"]
-    lines.append(f"**Message:** {data.message}")
-    
-    if data.email:
-        lines.append(f"**Contact:** {data.email}")
-    else:
-        lines.append("**Contact:** Anonymous")
+    lines = []
+    lines.append("📢 USER REPORT & DATA SNAPSHOT")
+    lines.append("==================================================")
+    lines.append(f"USER MESSAGE:\n{data.message}")
+    lines.append("--------------------------------------------------")
+    lines.append(f"CONTACT: {data.email if data.email else 'Anonymous'}")
+    lines.append("==================================================\n")
 
     if data.context:
-        lines.append("\n**--- FLIGHT CONTEXT ---**")
-        lines.append(f"**Airport:** {data.context.get('airport', 'N/A')}")
-        lines.append(f"**AI Summary:** {data.context.get('summary', 'N/A')}")
+        ctx = data.context
         
-        # Timeline
-        timeline = data.context.get('timeline')
-        if timeline:
-            lines.append(f"**Forecast 1:** {timeline.get('forecast_1', 'N/A')}")
-            lines.append(f"**Forecast 2:** {timeline.get('forecast_2', 'N/A')}")
-
-        lines.append(f"**METAR:** `{data.context.get('metar', 'N/A')}`")
-        if data.context.get('taf'):
-            lines.append(f"**TAF:** `{data.context.get('taf', 'N/A')}`")
-            
-        # Airspace Analysis
-        airspace = data.context.get('airspace_analysis')
-        if airspace and isinstance(airspace, list) and len(airspace) > 0:
-            lines.append(f"**Airspace Warnings:** {'; '.join(airspace)}")
-            
-        # Critical NOTAMs
-        crit_notams = data.context.get('notam_analysis')
-        if crit_notams and isinstance(crit_notams, list) and len(crit_notams) > 0:
-            lines.append(f"**Critical NOTAMs (AI):** {'; '.join(crit_notams)}")
-
-        # Raw NOTAMs (Summarized)
-        raw_notams = data.context.get('raw_notams')
+        # SECTION 1: RAW DATA (The "Truth")
+        lines.append("--- [1] RAW DATA SOURCE --------------------------")
+        lines.append(f"AIRPORT: {ctx.get('airport', 'N/A')}")
+        lines.append(f"\nMETAR:\n{ctx.get('metar', 'N/A')}")
+        lines.append(f"\nTAF:\n{ctx.get('taf', 'N/A')}")
+        
+        raw_notams = ctx.get('raw_notams')
         if raw_notams and isinstance(raw_notams, list):
-            count = len(raw_notams)
-            lines.append(f"**Total Raw NOTAMs:** {count}")
-            # Attach first 3 just for quick context
-            preview = raw_notams[:3]
-            for i, n in enumerate(preview):
-                lines.append(f"> {i+1}. {n[:200]}...") # Truncate long ones
+            lines.append(f"\nRAW NOTAMS ({len(raw_notams)} Total):")
+            # Show first 5 for context
+            for i, n in enumerate(raw_notams[:5]):
+                lines.append(f"[{i+1}] {n[:300]}...")
+            if len(raw_notams) > 5:
+                lines.append(f"... (+ {len(raw_notams)-5} more)")
+
+        # SECTION 2: AI OUPUT (The "Interpretation")
+        lines.append("\n\n--- [2] AI GENERATED OUTPUT ----------------------")
+        lines.append(f"MAIN SUMMARY:\n{ctx.get('summary', 'N/A')}")
+        
+        lines.append("\nTIMELINE FORECASTS:")
+        timeline = ctx.get('timeline', {})
+        # Handle simple string or object structure
+        f1 = timeline.get('forecast_1', 'N/A')
+        f2 = timeline.get('forecast_2', 'N/A')
+        
+        lines.append(f"1. {f1.get('summary', f1) if isinstance(f1, dict) else f1}")
+        lines.append(f"2. {f2.get('summary', f2) if isinstance(f2, dict) else f2}")
+
+        lines.append("\nCRITICAL NOTAMS (AI FLAGGED):")
+        crit = ctx.get('notam_analysis', [])
+        if crit:
+            for c in crit: lines.append(f"- {c}")
+        else:
+            lines.append("None flagged.")
+
+        lines.append("\nAIRSPACE WARNINGS:")
+        air = ctx.get('airspace_analysis', [])
+        if air:
+            for a in air: lines.append(f"- {a}")
+        else:
+            lines.append("None.")
 
     final_body = "\n".join(lines)
 

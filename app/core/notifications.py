@@ -28,6 +28,11 @@ class NotificationManager:
                 channels = json.loads(row['channels'])
                 return channels
             
+            # FALLBACK: If 'user_report' has no rule yet, default to SMTP (Email)
+            if event_type == "user_report":
+                print("DEBUG: No rule for 'user_report', defaulting to SMTP.")
+                return ["smtp"]
+
             print(f"DEBUG: No enabled rules found in DB for event '{event_type}'")
             return []
         except Exception as e:
@@ -44,7 +49,8 @@ class NotificationManager:
         print(f"DEBUG: Sending '{event_type}' alert via: {channels}")
 
         if "smtp" in channels and self.smtp_host:
-            await self._send_email(subject, message)
+            # FIX: Pass event_type to _send_email so the subject prefix works
+            await self._send_email(subject, message, event_type)
         
         if "discord" in channels and self.discord_url:
             await self._send_discord(subject, message)
