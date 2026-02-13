@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { BrowserRouter as Router, Routes, Route, Link, useLocation } from 'react-router-dom';
-import { Megaphone, Fuel } from 'lucide-react'; 
+import { Megaphone, Fuel, Menu, X } from 'lucide-react'; 
 import Dashboard from './components/Dashboard';
 import AdminDashboard from './components/admin/AdminDashboard';
 import LiveLogs from './components/admin/LiveLogs';
@@ -18,7 +18,8 @@ import NotFound from './components/NotFound';
 // Wrapper component to use hooks inside Router context
 const AppContent = () => {
   const [isScrolled, setIsScrolled] = useState(false);
-  const [banner, setBanner] = useState(null); 
+  const [isMenuOpen, setIsMenuOpen] = useState(false);
+  const [banner, setBanner] = useState(null);
   const [hasResults, setHasResults] = useState(false); // Track if Dashboard has results
   const location = useLocation(); // Track current page
 
@@ -80,14 +81,34 @@ const AppContent = () => {
                 <img src="/logo.webp" alt="WxDecoder Logo" className="h-14 md:h-20 w-auto object-contain" />
               </a>
 
-              {/* NAVIGATION MENU */}
-              <nav className="flex gap-6 md:gap-8 font-bold uppercase tracking-wide md:tracking-widest text-neutral-400 text-xs whitespace-nowrap">
+              {/* DESKTOP NAVIGATION */}
+              <nav className="hidden md:flex gap-8 font-bold uppercase tracking-widest text-neutral-400 text-xs whitespace-nowrap">
                 <a href="/" className="hover:text-white hover:text-blue-400 transition-colors">Home</a>
                 <Link to="/kiosk" className="hover:text-white hover:text-blue-400 transition-colors">Kiosk</Link>
                 <Link to="/about" className="hover:text-white hover:text-blue-400 transition-colors">About</Link>
               </nav>
+
+              {/* MOBILE MENU TOGGLE */}
+              <button 
+                className="md:hidden text-neutral-400 hover:text-white transition-colors p-2"
+                onClick={() => setIsMenuOpen(!isMenuOpen)}
+                aria-label="Toggle menu"
+              >
+                {isMenuOpen ? <X size={24} /> : <Menu size={24} />}
+              </button>
               
             </div>
+
+            {/* MOBILE MENU DROPDOWN */}
+            {isMenuOpen && (
+              <div className="md:hidden absolute top-full left-0 right-0 bg-neutral-900/95 backdrop-blur-md border-b border-neutral-800 p-6 shadow-2xl animate-fade-in">
+                 <nav className="flex flex-col gap-6 font-bold uppercase tracking-widest text-neutral-400 text-sm text-center">
+                    <a href="/" onClick={() => setIsMenuOpen(false)} className="hover:text-white hover:text-blue-400 transition-colors py-2 border-b border-neutral-800/50">Home</a>
+                    <Link to="/kiosk" onClick={() => setIsMenuOpen(false)} className="hover:text-white hover:text-blue-400 transition-colors py-2 border-b border-neutral-800/50">Kiosk</Link>
+                    <Link to="/about" onClick={() => setIsMenuOpen(false)} className="hover:text-white hover:text-blue-400 transition-colors py-2">About</Link>
+                 </nav>
+              </div>
+            )}
           </header>
         )}
 
@@ -137,7 +158,7 @@ const AppContent = () => {
               <Link to="/report" className="hover:text-white transition-colors">Report an Issue</Link>
               <Link to="/disclaimer" className="hover:text-white transition-colors">Terms Of Use & Disclaimer</Link>
             </div>
-            <p>&copy; {new Date().getFullYear()} WxDecoder v0.70 • Built for Pilots • All rights reserved</p>
+            <p>&copy; {new Date().getFullYear()} WxDecoder v0.71 • Built for Pilots • All rights reserved</p>
             <div className="flex flex-col items-center gap-2">
               <span className="text-neutral-500 italic">Help with server and API costs:</span>
               <a 

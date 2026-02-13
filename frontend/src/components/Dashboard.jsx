@@ -323,28 +323,40 @@ const Dashboard = ({ onSearchStateChange }) => {
              </div>
           ) : (
              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                {/* 6 Hour Card */}
+                {/* Forecast 1 */}
                 <div className="bg-neutral-800 border border-neutral-700 rounded-xl p-5">
                     <div className="border-b border-neutral-700 pb-2 mb-3">
                         <span className="text-blue-400 font-bold text-xs block uppercase tracking-wide">
-                            Weather {timeline.t_06?.time_label || "Next 6 Hours"} 
+                            {(timeline.forecast_1 === "NO_TAF" || timeline.forecast_1?.time_label === "NO_TAF") 
+                                ? "NO TAF AVAILABLE" 
+                                : `Weather ${timeline.forecast_1?.time_label || "Upcoming"}`
+                            }
                             {(raw.weather_source && icao && raw.weather_source !== icao.toUpperCase() && raw.weather_source !== "K" + icao.toUpperCase()) ? ` (${raw.weather_source})` : ""}
                         </span>
                     </div>
                     <p className="text-sm text-gray-300 leading-relaxed">
-                        {timeline.t_06?.summary || timeline.t_06 || "Analysis unavailable"}
+                        {(timeline.forecast_1 === "NO_TAF" || timeline.forecast_1?.summary === "NO_TAF" || timeline.forecast_1?.summary === "NO_TAF.") 
+                            ? "--" 
+                            : (timeline.forecast_1?.summary || timeline.forecast_1 || "Analysis unavailable")
+                        }
                     </p>
                 </div>
-                {/* 12 Hour Card */}
+                {/* Forecast 2 */}
                 <div className="bg-neutral-800 border border-neutral-700 rounded-xl p-5">
                     <div className="border-b border-neutral-700 pb-2 mb-3">
                         <span className="text-blue-400 font-bold text-xs block uppercase tracking-wide">
-                            Weather {timeline.t_12?.time_label || "Next 12 Hours"}
+                             {(timeline.forecast_2 === "NO_TAF" || timeline.forecast_2?.time_label === "NO_TAF") 
+                                ? "NO ADDITIONAL TAF AVAILABLE" 
+                                : `Weather ${timeline.forecast_2?.time_label || "Outlook"}`
+                            }
                             {(raw.weather_source && icao && raw.weather_source !== icao.toUpperCase() && raw.weather_source !== "K" + icao.toUpperCase()) ? ` (${raw.weather_source})` : ""}
                         </span>
                     </div>
                     <p className="text-sm text-gray-300 leading-relaxed">
-                        {timeline.t_12?.summary || timeline.t_12 || "Analysis unavailable"}
+                        {(timeline.forecast_2 === "NO_TAF" || timeline.forecast_2?.summary === "NO_TAF" || timeline.forecast_2?.summary === "NO_TAF.") 
+                            ? "--" 
+                            : (timeline.forecast_2?.summary || timeline.forecast_2 || "Analysis unavailable")
+                        }
                     </p>
                 </div>
              </div>

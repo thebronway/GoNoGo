@@ -98,7 +98,7 @@ def check_airspace_zones(target_code, target_lat, target_lon):
 
     return warnings
 
-async def get_nearest_reporting_stations(target_code, limit=10):
+async def get_nearest_reporting_stations(target_code, limit=15):
     """
     Returns a LIST of tuples: [(icao, distance_nm), ...].
     PRIORITIZES Large/Medium airports within 25nm (likely to have TAFs).

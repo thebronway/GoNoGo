@@ -406,12 +406,12 @@ const KioskDisplay = () => {
                     {/* 2. Forecast Bubbles (TAF) */}
                     <div className="grid grid-cols-2 gap-4 flex-none">
                         <TimelineCard 
-                            title={`Weather ${timeline.t_06?.time_label || "Next 6 Hours"}${isDifferent ? ` (${source})` : ""}`}
-                            summary={timeline.t_06?.summary || timeline.t_06} 
+                            title={`Weather ${timeline.forecast_1?.time_label || "Upcoming"}${isDifferent ? ` (${source})` : ""}`}
+                            summary={timeline.forecast_1?.summary || timeline.forecast_1} 
                         />
                         <TimelineCard 
-                            title={`Weather ${timeline.t_12?.time_label || "Next 12 Hours"}${isDifferent ? ` (${source})` : ""}`}
-                            summary={timeline.t_12?.summary || timeline.t_12} 
+                            title={`Weather ${timeline.forecast_2?.time_label || "Outlook"}${isDifferent ? ` (${source})` : ""}`}
+                            summary={timeline.forecast_2?.summary || timeline.forecast_2} 
                         />
                     </div>
 

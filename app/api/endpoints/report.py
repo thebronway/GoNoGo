@@ -41,8 +41,8 @@ async def submit_report(data: ReportRequest, request: Request, background_tasks:
         # Timeline
         timeline = data.context.get('timeline')
         if timeline:
-            lines.append(f"**Timeline (6h):** {timeline.get('t_06', 'N/A')}")
-            lines.append(f"**Timeline (12h):** {timeline.get('t_12', 'N/A')}")
+            lines.append(f"**Forecast 1:** {timeline.get('forecast_1', 'N/A')}")
+            lines.append(f"**Forecast 2:** {timeline.get('forecast_2', 'N/A')}")
 
         lines.append(f"**METAR:** `{data.context.get('metar', 'N/A')}`")
         if data.context.get('taf'):

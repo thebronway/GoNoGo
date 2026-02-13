@@ -1,5 +1,5 @@
 import React from 'react';
-import { Monitor, CheckCircle2, Tv, RefreshCw, BrainCircuit, ExternalLink, Mail } from 'lucide-react';
+import { Monitor, CheckCircle2, Tv, RefreshCw, BrainCircuit, ExternalLink, Mail, Plane, ShieldAlert, Zap } from 'lucide-react';
 import KioskInquiryModal from './KioskInquiryModal';
 import { useState } from 'react';
 import { Link } from 'react-router-dom';
@@ -46,62 +46,145 @@ const KioskLanding = () => {
       />
 
       {/* HERO SECTION */}
-      <div className="text-center max-w-3xl mx-auto mb-20">
-        <div className="inline-flex items-center justify-center p-3 bg-blue-900/20 border border-blue-900/50 rounded-full mb-6 animate-fade-in">
-            <Monitor className="w-8 h-8 text-blue-400" />
-        </div>
+      <div className="text-center max-w-3xl mx-auto mb-12">
         
         <h1 className="text-5xl md:text-6xl font-black text-white mb-6 tracking-tight leading-tight">
-            The Digital <br />
+            A Digital&nbsp;
             <span className="text-transparent bg-clip-text bg-gradient-to-r from-blue-400 to-cyan-300">
                 Weather Kiosk
             </span>
         </h1>
         <p className="text-xl text-gray-400 mb-8 leading-relaxed">
             Upgrade your Flight School or FBO lobby with an always-on, auto-updating 
-            situational awareness display with weather, airpace info and NOTAMs.
+            situational awareness display with weather, airspace info, and NOTAMs.
         </p>
       </div>
 
-      {/* LIVE PREVIEWS */}
+      {/* DEMO GIF */}
+      <div className="max-w-4xl mx-auto mb-24 rounded-xl overflow-hidden border border-neutral-800 shadow-2xl shadow-blue-900/20">
+         <img src="/kiosk/KANP.gif" alt="Kiosk Mode Animation" className="w-full h-auto object-cover" />
+      </div>
+
+      {/* SCREENSHOTS / LIVE PREVIEWS */}
       <div className="mb-24">
-          <div className="flex items-center gap-4 mb-6 justify-center md:justify-start">
-              <div className="h-px bg-neutral-800 flex-1"></div>
-              <span className="text-xs font-bold text-neutral-500 uppercase tracking-widest">Live Examples</span>
-              <div className="h-px bg-neutral-800 flex-1"></div>
+          <div className="flex items-center gap-4 mb-8 justify-center">
+              <div className="h-px bg-neutral-800 flex-1 max-w-[100px]"></div>
+              <span className="text-xs font-bold text-neutral-500 uppercase tracking-widest">Live Demos & Screenshots</span>
+              <div className="h-px bg-neutral-800 flex-1 max-w-[100px]"></div>
           </div>
-          
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-6 max-w-2xl mx-auto">
-              <ExampleLink code="KANP" name="Lee Airport" profile="small" />
-              <ExampleLink code="KBOS" name="Logan Intl" profile="small" />
+
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-8 max-w-5xl mx-auto">
+              
+              {/* CARD 1: KANP */}
+              <div className="bg-neutral-900/30 border border-neutral-800 rounded-2xl p-6 flex flex-col gap-6 hover:border-blue-500/30 transition-colors group">
+                  {/* Header */}
+                  <div className="flex items-center gap-3">
+                      <span className="w-2.5 h-2.5 rounded-full bg-green-500 animate-pulse shadow-[0_0_8px_rgba(34,197,94,0.6)]"></span>
+                      <div>
+                          <h3 className="text-2xl font-black text-white leading-none">KANP</h3>
+                          <p className="text-xs font-bold text-neutral-500 uppercase tracking-widest mt-1">Lee Airport</p>
+                      </div>
+                  </div>
+
+                  {/* Image Preview */}
+                  <a href="/kiosk/KANP.webp" target="_blank" rel="noopener noreferrer" className="block rounded-lg overflow-hidden border border-neutral-800 relative shadow-2xl cursor-zoom-in">
+                      <img src="/kiosk/KANP.webp" alt="KANP Preview" className="w-full h-auto object-cover opacity-80 group-hover:opacity-100 transition-opacity" />
+                      <div className="absolute inset-0 flex items-center justify-center bg-black/50 opacity-0 group-hover:opacity-100 transition-opacity">
+                          <span className="text-xs font-bold text-white uppercase tracking-wider bg-black/50 px-3 py-1 rounded border border-white/20">View 4K Screenshot</span>
+                      </div>
+                  </a>
+
+                  {/* Action Button */}
+                  <Link 
+                      to="/kiosk/KANP/small" 
+                      target="_blank"
+                      className="w-full bg-blue-600 hover:bg-blue-500 text-white font-bold py-3 px-4 rounded-xl flex items-center justify-center gap-2 transition-all uppercase tracking-wider text-sm shadow-lg shadow-blue-900/20"
+                  >
+                      <ExternalLink size={16} /> Launch Live Demo
+                  </Link>
+              </div>
+
+              {/* CARD 2: KBOS */}
+              <div className="bg-neutral-900/30 border border-neutral-800 rounded-2xl p-6 flex flex-col gap-6 hover:border-blue-500/30 transition-colors group">
+                  {/* Header */}
+                  <div className="flex items-center gap-3">
+                      <span className="w-2.5 h-2.5 rounded-full bg-green-500 animate-pulse shadow-[0_0_8px_rgba(34,197,94,0.6)]"></span>
+                      <div>
+                          <h3 className="text-2xl font-black text-white leading-none">KBOS</h3>
+                          <p className="text-xs font-bold text-neutral-500 uppercase tracking-widest mt-1">Logan Intl</p>
+                      </div>
+                  </div>
+
+                  {/* Image Preview */}
+                  <a href="/kiosk/KBOS.webp" target="_blank" rel="noopener noreferrer" className="block rounded-lg overflow-hidden border border-neutral-800 relative shadow-2xl cursor-zoom-in">
+                      <img src="/kiosk/KBOS.webp" alt="KBOS Preview" className="w-full h-auto object-cover opacity-80 group-hover:opacity-100 transition-opacity" />
+                      <div className="absolute inset-0 flex items-center justify-center bg-black/50 opacity-0 group-hover:opacity-100 transition-opacity">
+                          <span className="text-xs font-bold text-white uppercase tracking-wider bg-black/50 px-3 py-1 rounded border border-white/20">View 4K Screenshot</span>
+                      </div>
+                  </a>
+
+                  {/* Action Button */}
+                  <Link 
+                      to="/kiosk/KBOS/small" 
+                      target="_blank"
+                      className="w-full bg-blue-600 hover:bg-blue-500 text-white font-bold py-3 px-4 rounded-xl flex items-center justify-center gap-2 transition-all uppercase tracking-wider text-sm shadow-lg shadow-blue-900/20"
+                  >
+                      <ExternalLink size={16} /> Launch Live Demo
+                  </Link>
+              </div>
+
           </div>
-          <p className="text-center text-xs text-neutral-600 mt-4">
-              *Clicking these will open the Kiosk display in a new tab.
-          </p>
       </div>
 
       {/* FEATURES GRID */}
-      <div className="grid md:grid-cols-3 gap-6 mb-24">
-        <FeatureCard 
-            icon={Tv}
-            title="16:9 Optimized" 
-            desc="Designed specifically for large TV screens mounted in pilot lounges or lobbies. High contrast, readable from a distance, and no mouse interaction required."
-        />
-        <FeatureCard 
-            icon={RefreshCw}
-            title="Smart Polling" 
-            desc="The system checks for new METARs every minute. When a new report is published, the screen automatically refreshes the AI analysis instantly."
-        />
-        <FeatureCard 
-            icon={BrainCircuit}
-            title="Plain English" 
-            desc="Raw data is crucial, but context is key. We decode the weather, analyze crosswind components against your fleet, and highlight critical NOTAMs."
-        />
+      <div className="mb-24">
+        <div className="flex items-center gap-4 mb-8 justify-center">
+            <div className="h-px bg-neutral-800 flex-1 max-w-[100px]"></div>
+            <span className="text-xs font-bold text-neutral-500 uppercase tracking-widest">Features</span>
+            <div className="h-px bg-neutral-800 flex-1 max-w-[100px]"></div>
+        </div>
+        
+        <div className="grid md:grid-cols-3 gap-6">
+            <FeatureCard 
+                icon={Monitor}
+                title="Set & Forget Display" 
+                desc="Designed for zero-touch operation. Mount a TV in your pilot lounge, load the URL, and it runs forever. No mouse, no refreshing, just live data."
+            />
+            <FeatureCard 
+                icon={RefreshCw}
+                title="Always-On Awareness" 
+                desc="The system automatically polls for new METARs every 60 seconds. As soon as conditions change, the screen updates instantly."
+            />
+            <FeatureCard 
+                icon={BrainCircuit}
+                title="Safety Culture" 
+                desc="Raw data is crucial, but context is key. We decode NOTAMs and analyze crosswind components against your fleet to support Go/No-Go decisions."
+            />
+            <FeatureCard 
+                icon={Plane}
+                title="Fleet Logic" 
+                desc="Tailor the analysis to your aircraft. Whether you fly C172s or TBMs, the system flags crosswinds based on your specific operational limits."
+            />
+            <FeatureCard 
+                icon={ShieldAlert}
+                title="Airspace Guardian" 
+                desc="Automatic proximity checks for critical airspace like the DC SFRA or P-40. Don't let a student pilot blunder into a restricted zone."
+            />
+            <FeatureCard 
+                icon={Zap}
+                title="High Reliability" 
+                desc="Engineered for uptime. Our smart caching and error handling systems ensure your screen stays live, even during momentary API outages."
+            />
+        </div>
       </div>
 
       {/* USE CASES & CTA */}
+      <div className="flex items-center gap-4 mb-8 justify-center">
+            <div className="h-px bg-neutral-800 flex-1 max-w-[100px]"></div>
+            <span className="text-xs font-bold text-neutral-500 uppercase tracking-widest">Get Kiosk Mode</span>
+            <div className="h-px bg-neutral-800 flex-1 max-w-[100px]"></div>
+      </div>  
       <div className="grid md:grid-cols-2 gap-12 items-center bg-neutral-900/30 border border-neutral-800 rounded-3xl p-8 md:p-12">
-          
           <div className="space-y-6">
               <h2 className="text-3xl font-bold text-white">Built for Aviation Businesses</h2>
               <ul className="space-y-4">

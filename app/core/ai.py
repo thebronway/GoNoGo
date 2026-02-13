@@ -222,10 +222,10 @@ async def analyze_risk(icao_code, weather_data, notams, plane_size="small", repo
     6. TIMELINE ("timeline"):
        - Analyze the TAF raw text to find specific forecast change groups (FM, BECMG, TEMPO).
        - RULE: Ignore any forecast periods starting within 1 hour of CURRENT TIME (immediate future).
-       - "t_06": The FIRST significant forecast period > 1 hour from now. 
+       - "forecast_1": The FIRST significant forecast period > 1 hour from now. 
           - "time_label": Convert the forecast time to the target airport's LOCAL time (e.g. "From 2:00 PM EST"). Use the provided timezone: {airport_tz}.
           - "summary": Brief description.
-       - "t_12": The NEXT significant forecast period immediately following the first one.
+       - "forecast_2": The NEXT significant forecast period immediately following the first one.
           - "time_label": Convert to LOCAL time.
           - "summary": Brief description.
        - If TAF is missing, set values to "NO_TAF".
@@ -246,8 +246,8 @@ async def analyze_risk(icao_code, weather_data, notams, plane_size="small", repo
         "summary_airspace": "...",
         "summary_notams": "...",
         "timeline": {{
-            "t_06": {{ "time_label": "...", "summary": "..." }},
-            "t_12": {{ "time_label": "...", "summary": "..." }}
+            "forecast_1": {{ "time_label": "...", "summary": "..." }},
+            "forecast_2": {{ "time_label": "...", "summary": "..." }}
         }},
         "bubbles": {{ 
             "wind": "...", 
